@@ -8,3 +8,7 @@ data
 .env
 *.xml
 
+binary
+a.py
+lol.py
+
