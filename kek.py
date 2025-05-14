@@ -23,7 +23,7 @@ def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_k
 
         yield q
 
-def insert_in_table(params: list[tuple[str, str, str]]):
+def table_fields(params: list[tuple[str, str, str]]):
     """Получить список имён полей таблицы clickhouse"""
     return [p[2] for p in params]
 
