@@ -4,9 +4,9 @@
 # Исключены:
 # ym:pv:counterUserIDHash так как у нас все пользователи анонимные
 # ym:pv:networkType так как устарела и будет удалена
+# ym:pv:watchID так как всё равно будет присутствовать во всех запросах из-за разделения
 
 params = [
-    ('ym:pv:watchID', 'UInt64', 'watchID'),
     ('ym:pv:pageViewID', 'UInt32', 'pageViewID'),
     ('ym:pv:counterID', 'UInt32', 'counterID'),
     ('ym:pv:clientID', 'UInt64', 'clientID'),

@@ -4,9 +4,9 @@
 # Исключены:
 # ym:s:counterUserIDHash так как у нас все пользователи анонимные
 # ym:s:networkType так как устарела и будет удалена
+# ym:s:visitID так как всё равно будет присутствовать во всех запросах из-за разделения
 
 params = [
-    ('ym:s:visitID', 'UInt64', 'visitID'),
     ('ym:s:counterID', 'UInt32', 'counterID'),
     ('ym:s:watchIDs', 'Array(UInt64)', 'watchIDs'),
     ('ym:s:date', 'Date', 'date'),
