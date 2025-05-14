@@ -20,5 +20,7 @@ values = {
     'TEMP_VISIT_KEY': 'ym:s:visitID UInt64 visitID',
     'TEMP_HIT_KEY': 'ym:pv:watchID UInt64 watchID',
 
+    'ATTRIBUTIONS': 'AUTOMATIC CROSS_DEVICE_LAST CROSS_DEVICE_LAST_YANDEX_DIRECT_CLICK CROSS_DEVICE_FIRST CROSS_DEVICE_LAST_SIGNIFICANT',
+
     **dotenv_values('.env', verbose=False),
 }
