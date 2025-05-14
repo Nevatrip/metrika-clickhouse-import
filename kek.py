@@ -4,7 +4,7 @@ def get_table_names(prefix: str, attributions: list[str]|None = None):
         yield prefix
     else:
         for a in attributions:
-            yield f"{prefix}-{a}"
+            yield f"{prefix}_{a}"
 
 def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_keys: list[str], attributions: list[str]|None = None):
     """Получить генератор, выдающий запросы на создание таблиц clickhouse по агрегациям"""
@@ -45,9 +45,15 @@ def divide_yandex_params(params: list[tuple[str, str, str]], limit: int = 3000, 
         if char_count <= limit:
             last_index += 1
         else:
-            yield (first_index, last_index)
             if first_index == last_index:
-                last_index += 1
+                raise Exception('Too long parameter')
+
+            yield (first_index, last_index)
+
             first_index = last_index
             char_count = 0
+
+    if first_index == last_index:
+        raise Exception('Too long parameter')
+    yield (first_index, last_index)
 
