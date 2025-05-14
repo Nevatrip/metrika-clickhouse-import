@@ -4,7 +4,9 @@ values = {
     'CLICKHOUSE_HOST': 'localhost',
     'CLICKHOUSE_USER': 'root',
     'CLICKHOUSE_PASSWORD': 'secret',
-    'CLICKHOUSE_DATABASE': 'metrika',
+
+    'MAIN_DATABASE': 'metrika',
+    'TEMP_DATABASE': 'temp_metrika',
 
     'METRIKA_COUNTER': None,
     'METRIKA_KEY': None,
