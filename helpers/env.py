@@ -17,6 +17,8 @@ TEMP_HIT_KEY = 'TEMP_HIT_KEY'
 ATTRIBUTIONS = 'ATTRIBUTIONS' 
 MAIN_VISIT_PRIMARY_KEYS = 'MAIN_VISIT_PRIMARY_KEYS'
 MAIN_HIT_PRIMATY_KEYS = 'MAIN_HIT_PRIMATY_KEYS'
+FIRST_DATE = 'FIRST_DATE'
+DATE_FILE = 'DATE_FILE'
 
 __values: dict[str, str | None] = {
     CLICKHOUSE_HOST: 'localhost',
@@ -28,6 +30,9 @@ __values: dict[str, str | None] = {
 
     METRIKA_COUNTER: None,
     METRIKA_KEY: None,
+
+    FIRST_DATE: None,
+    DATE_FILE: 'dates.txt',
 
     METRIKA_CHAR_LIMIT: '3000',
 
