@@ -11,4 +11,6 @@ data
 binary
 a.py
 lol.py
+*.txt
+*.json
 
