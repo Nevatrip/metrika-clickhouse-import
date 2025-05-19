@@ -48,8 +48,6 @@ temp_db_name = env_value_or_error(env.TEMP_DATABASE)
 orig_visit_params = []
 orig_hit_params = []
 
-attributions = attributions[:1]
-
 for i1, i2 in funcs.divide_yandex_params(cvp.params, int(env_value_or_error(env.METRIKA_CHAR_LIMIT)), [visit_key]):
     params = cvp.params[i1:i2]
     orig_visit_params.append(params)
@@ -149,7 +147,11 @@ for attr_num, attr in enumerate(attributions):
         else:
             loggers(f"ERROR CLEANING REQUEST #{id}, STATUS = {resp.status_code}")
 
-
+    loggers(f"IMPORTING DATA IN TABLE {visit_table_names[attr_num]}")
     q = funcs.join_temp_tables(visit_table_names[attr_num], prefixes, orig_visit_params, visit_key[2])
     join_client.execute(q)
+
+    for t in prefixes:
+        join_client.execute(f"DELETE FROM {t} WHERE 1")
+        loggers(f"CLEANED TEMPORARY TABLE {t}")
 
