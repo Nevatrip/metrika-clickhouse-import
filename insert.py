@@ -20,6 +20,8 @@ with open(env_value_or_error(env.DATE_FILE)) as f:
 if len(dates) != 2:
     raise Exception('INVALID DATES')
 
+loggers(f"STARTING TO IMPORT DATES FROM {dates[0]} TO {dates[1]}")
+
 headers = {
     'Authorization': f"OAuth {env_value_or_error(env.METRIKA_KEY)}"
 }
@@ -110,3 +112,7 @@ funcs.insert_data(
     hit_key[2],
     loggers
 )
+
+with open(env_value_or_error(env.DATE_FILE), 'w') as f:
+    f.write(funcs.get_next_dates(dates[1], 90))
+
