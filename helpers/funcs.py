@@ -74,6 +74,7 @@ def divide_yandex_params(params: list[tuple[str, str, str]], limit: int = 3000, 
     yield (first_index, last_index)
 
 def get_init_dates(date: str, period_days: int):
+    """Получить даты, выставляемые при инициализации"""
     DAY_SECONDS = 24 * 3600
 
     first_date = dt.datetime.fromisoformat(date)
@@ -88,6 +89,7 @@ def get_init_dates(date: str, period_days: int):
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
 
 def get_next_dates(date: str, period_days: int):
+    """Получить даты, выставляемые после вставки метрики в таблицы"""
     day_delta = dt.timedelta(days=1)
 
     first_date = dt.datetime.fromisoformat(date) + day_delta
@@ -102,6 +104,8 @@ def get_next_dates(date: str, period_days: int):
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
 
 def check_request_status(status: str):
+    """Проверить статус запроса
+    Вернёт `None` при ошибке"""
     success = ['processed']
     wait = ['created']
 
@@ -113,6 +117,7 @@ def check_request_status(status: str):
     return None
 
 def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields: list[list[tuple[str, str, str]]], primary_key: str):
+    """Получить запрос на объединение временных таблиц и вставку данных в постоянную таблицу"""
     q = f"INSERT INTO TABLE {main_table_name} "
 
     statements: list[str] = []
@@ -140,12 +145,12 @@ def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields
 
 def insert_data(
     attributions: list[str],
-    source: str,
+    source: str, # hits или visits
     params: list[list[tuple[str, str, str]]],
     date1: str,
     date2: str,
     counter_id: str|int,
-    request_headers: dict[str, str],
+    request_headers: dict[str, str], # Обязательно должен быть токен OAuth
     temp_table_prefix: str,
     main_table_prefix: str,
     insert_client: cc.Client,
@@ -154,6 +159,7 @@ def insert_data(
     temp_primary_key: str,
     log_func: Callable[[str], None],
 ):
+    """Основная функция выгрузки данных"""
     main_table_names = list(get_table_names(main_table_prefix, attributions))
 
     for attr_num, attr in enumerate(attributions):

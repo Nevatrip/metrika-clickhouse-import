@@ -113,6 +113,8 @@ funcs.insert_data(
     loggers
 )
 
+day_count = int(env_value_or_error(env.DAY_COUNT))
+
 with open(env_value_or_error(env.DATE_FILE), 'w') as f:
-    f.write(funcs.get_next_dates(dates[1], 90))
+    f.write(funcs.get_next_dates(dates[1], day_count))
 

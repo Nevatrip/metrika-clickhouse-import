@@ -19,6 +19,7 @@ MAIN_VISIT_PRIMARY_KEYS = 'MAIN_VISIT_PRIMARY_KEYS'
 MAIN_HIT_PRIMATY_KEYS = 'MAIN_HIT_PRIMATY_KEYS'
 FIRST_DATE = 'FIRST_DATE'
 DATE_FILE = 'DATE_FILE'
+DAY_COUNT = 'DAY_COUNT' 
 
 __values: dict[str, str | None] = {
     CLICKHOUSE_HOST: 'localhost',
@@ -33,6 +34,7 @@ __values: dict[str, str | None] = {
 
     FIRST_DATE: None,
     DATE_FILE: 'dates.txt',
+    DAY_COUNT: '90',
 
     METRIKA_CHAR_LIMIT: '3000',
 
