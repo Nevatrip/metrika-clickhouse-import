@@ -1,5 +1,13 @@
+from collections.abc import Callable
 import datetime as dt
 import time
+import requests as rq
+import tempfile as tmp
+import clickhouse_connect.driver.client as cc
+from clickhouse_connect.driver.tools import insert_file
+import clickhouse_driver as cd
+
+import helpers.urls as urls
 
 def get_table_names(prefix: str, attributions: list[str]|None = None):
     """Получить генератор, выдающий имена таблиц clickhouse по атрибуциям"""
@@ -129,4 +137,102 @@ def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields
         q += f"JOIN {table_names[i]} ON {table_names[i - 1]}.{primary_key} = {table_names[i]}.{primary_key} "
 
     return q
+
+def insert_data(
+    attributions: list[str],
+    source: str,
+    params: list[list[tuple[str, str, str]]],
+    date1: str,
+    date2: str,
+    counter_id: str|int,
+    request_headers: dict[str, str],
+    temp_table_prefix: str,
+    main_table_prefix: str,
+    insert_client: cc.Client,
+    join_client: cd.Client,
+    orig_params: list[list[tuple[str, str, str]]],
+    temp_primary_key: str,
+    log_func: Callable[[str], None],
+):
+    main_table_names = list(get_table_names(main_table_prefix, attributions))
+
+    for attr_num, attr in enumerate(attributions):
+        log_func('ATTRIBUTION ' + attr)
+        ids: list[int] = []
+
+        for p in params:
+            request_params = {
+                'date1': date1,
+                'date2': date2,
+                'source': source,
+                'fields': ','.join(metrika_fields(p)),
+                'attribution': attr
+            }
+
+            resp = rq.post(urls.create(counter_id), params=request_params, headers=request_headers)
+            body = resp.json()['log_request']
+
+            ids.append(body['request_id'])
+
+        log_func('CREATED REQUESTS' + str(ids))
+
+        ready = False
+        while not ready:
+            ready = True
+            for i, id in enumerate(ids):
+                time.sleep(3)
+
+                resp = rq.get(urls.check(counter_id, id), headers=request_headers)
+                status = resp.json()['log_request']['status']
+
+                checked = check_request_status(status)
+                if checked is None:
+                    raise Exception('Error processing logs request')
+
+                ready = ready and checked
+
+        log_func('ALL READY')
+
+        prefixes = [f"{temp_table_prefix}{str(i + 1)}" for i in range(len(ids))]
+
+        for i, id in enumerate(ids):
+            log_func(f"INSERTING REQUEST #{id}")
+
+            resp = rq.get(urls.check(counter_id, id), headers=request_headers)
+            body = resp.json()['log_request']
+
+            parts = len(body['parts'])
+
+            log_func('TABLE PREFIX = ' + prefixes[i])
+
+            for part in range(parts):
+                log_func('PART #' + str(part))
+                with tmp.NamedTemporaryFile('w+b') as f:
+                    downloaded = rq.get(urls.download(counter_id, id, part), headers=request_headers)
+
+                    # По каким-то причинам в метрике есть и нормальные запятые
+                    # И экранированные, из-за этого парсер кликхауса ломается
+                    text = downloaded.content.replace('\\\''.encode(), '\''.encode()) 
+
+                    index = text.find('\n'.encode())
+
+                    f.write(text[index + 1:])
+                    f.flush()
+
+                    insert_file(insert_client, prefixes[i], f.name, 'TSV', table_fields(params[i]))
+                    log_func(f"INSERTED PART {part} in table {prefixes[i]}")
+
+            resp = rq.post(urls.clean(counter_id, id), headers=request_headers)
+            if resp.status_code == 200:
+                log_func(f"CLEANED REQUEST #{id}")
+            else:
+                log_func(f"ERROR CLEANING REQUEST #{id}, STATUS = {resp.status_code}")
+
+        log_func(f"IMPORTING DATA IN TABLE {main_table_names[attr_num]}")
+        q = join_temp_tables(main_table_names[attr_num], prefixes, orig_params, temp_primary_key)
+        join_client.execute(q)
+
+        for t in prefixes:
+            join_client.execute(f"DELETE FROM {t} WHERE 1")
+            log_func(f"CLEANED TEMPORARY TABLE {t}")
 
