@@ -1,17 +1,12 @@
 #!/usr/bin/env python
 
-import tempfile as tmp
-import clickhouse_connect as cc
-from clickhouse_connect.driver.tools import insert_file
-import requests as rq
-import time
-import copy
-
 import clickhouse_driver as cd
+import clickhouse_connect as cc
+import copy
 
 from helpers.env import env_value_or_error
 import helpers.env as env
-from helpers import chosen_hit_params as chp, chosen_visit_params as cvp, funcs, urls
+from helpers import chosen_hit_params as chp, chosen_visit_params as cvp, funcs
 
 def loggers(s: str):
     print(s)
@@ -21,6 +16,9 @@ join_client = cd.Client(host=env_value_or_error(env.CLICKHOUSE_HOST), user=env_v
 
 with open(env_value_or_error(env.DATE_FILE)) as f:
     dates = f.readline().split(',')
+
+if len(dates) != 2:
+    raise Exception('INVALID DATES')
 
 headers = {
     'Authorization': f"OAuth {env_value_or_error(env.METRIKA_KEY)}"
@@ -37,13 +35,16 @@ main_hit_prefix = env_value_or_error(env.HIT_TABLE_PREFIX)
 main_visit_prefix = f"{main_db_name}.{main_visit_prefix}"
 main_hit_prefix = f"{main_db_name}.{main_hit_prefix}"
 
-visit_table_names = list(funcs.get_table_names(main_visit_prefix, attributions))
-hit_table_names = list(funcs.get_table_names(main_hit_prefix, attributions))
-
 visit_key = (visit_key[0], visit_key[1], visit_key[2])
 hit_key = (hit_key[0], hit_key[1], hit_key[2])
 
 temp_db_name = env_value_or_error(env.TEMP_DATABASE)
+
+temp_visit_prefix = env_value_or_error(env.TEMP_VISIT_TABLE_PREFIX)
+temp_hit_prefix = env_value_or_error(env.TEMP_HIT_TABLE_PREFIX)
+
+temp_visit_prefix = f"{temp_db_name}.{temp_visit_prefix}"
+temp_hit_prefix = f"{temp_db_name}.{temp_hit_prefix}"
 
 orig_visit_params = []
 orig_hit_params = []
@@ -55,7 +56,7 @@ for i1, i2 in funcs.divide_yandex_params(cvp.params, int(env_value_or_error(env.
 loggers('VISITS DIVIDED')
 
 for i1, i2 in funcs.divide_yandex_params(chp.params, int(env_value_or_error(env.METRIKA_CHAR_LIMIT)), [hit_key]):
-    params = cvp.params[i1:i2]
+    params = chp.params[i1:i2]
     orig_hit_params.append(params)
 
 loggers('HITS DIVIDED')
@@ -74,84 +75,38 @@ orig_hit_params[0].append(hit_key)
 
 counter_id = int(env_value_or_error(env.METRIKA_COUNTER))
 
-for attr_num, attr in enumerate(attributions):
-    loggers('ATTRIBUTION ' + attr)
-    ids: list[int] = []
+loggers('STARTING TO IMPORT VISITS')
+funcs.insert_data(
+    attributions,
+    'visits',
+    visit_params,
+    dates[0],
+    dates[1],
+    counter_id,
+    headers,
+    temp_visit_prefix,
+    main_visit_prefix,
+    insert_client,
+    join_client,
+    orig_visit_params,
+    visit_key[2],
+    loggers,
+)
 
-    for i, p in enumerate(visit_params):
-        visit_req_params = {
-            'date1': dates[0],
-            'date2': dates[1],
-            'source': 'visits',
-            'fields': ','.join(funcs.metrika_fields(p)),
-            'attribution': attr
-        }
-
-        resp = rq.post(urls.create(counter_id), params=visit_req_params, headers=headers)
-        body = resp.json()['log_request']
-
-        ids.append(body['request_id'])
-
-    loggers('CREATED REQUESTS' + str(ids))
-
-    ready = False
-    while not ready:
-        ready = True
-        for i, id in enumerate(ids):
-            time.sleep(3)
-
-            resp = rq.get(urls.check(counter_id, id), headers=headers)
-            status = resp.json()['log_request']['status']
-
-            checked = funcs.check_request_status(status)
-            if checked is None:
-                raise Exception('Error processing logs request')
-
-            ready = ready and checked
-
-    loggers('ALL READY')
-
-    table_prefix = env_value_or_error(env.TEMP_VISIT_TABLE_PREFIX)
-    prefixes = [f"{temp_db_name}.{table_prefix}{str(i + 1)}" for i in range(len(ids))]
-
-    for i, id in enumerate(ids):
-        loggers(f"INSERTING REQUEST #{id}")
-
-        resp = rq.get(urls.check(counter_id, id), headers=headers)
-        body = resp.json()['log_request']
-
-        parts = len(body['parts'])
-
-        loggers('TABLE PREFIX = ' + prefixes[i])
-
-        for part in range(parts):
-            loggers('PART #' + str(part))
-            with tmp.NamedTemporaryFile('w+b') as f:
-                downloaded = rq.get(urls.download(counter_id, id, part), headers=headers)
-
-                # По каким-то причинам в метрике есть и нормальные запятые
-                # И экранированные, из-за этого парсер кликхауса ломается
-                text = downloaded.content.replace('\\\''.encode(), '\''.encode()) 
-
-                index = text.find('\n'.encode())
-
-                f.write(text[index + 1:])
-                f.flush()
-
-                insert_file(insert_client, prefixes[i], f.name, 'TSV', funcs.table_fields(visit_params[i]))
-                loggers(f"INSERTED PART {part} in table {prefixes[i]}")
-
-        resp = rq.post(urls.clean(counter_id, id), headers=headers)
-        if resp.status_code == 200:
-            loggers(f"CLEANED REQUEST #{id}")
-        else:
-            loggers(f"ERROR CLEANING REQUEST #{id}, STATUS = {resp.status_code}")
-
-    loggers(f"IMPORTING DATA IN TABLE {visit_table_names[attr_num]}")
-    q = funcs.join_temp_tables(visit_table_names[attr_num], prefixes, orig_visit_params, visit_key[2])
-    join_client.execute(q)
-
-    for t in prefixes:
-        join_client.execute(f"DELETE FROM {t} WHERE 1")
-        loggers(f"CLEANED TEMPORARY TABLE {t}")
-
+loggers('STARTING TO IMPORT HITS')
+funcs.insert_data(
+    attributions,
+    'hits',
+    hit_params,
+    dates[0],
+    dates[1],
+    counter_id,
+    headers,
+    temp_hit_prefix,
+    main_hit_prefix,
+    insert_client,
+    join_client,
+    orig_hit_params,
+    hit_key[2],
+    loggers
+)

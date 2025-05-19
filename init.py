@@ -31,7 +31,7 @@ for i1, i2 in funcs.divide_yandex_params(cvp.params, int(env_value_or_error(env.
     visit_params.append(params)
 
 for i1, i2 in funcs.divide_yandex_params(chp.params, int(env_value_or_error(env.METRIKA_CHAR_LIMIT)), [hit_key]):
-    params = cvp.params[i1:i2]
+    params = chp.params[i1:i2]
     params.append(hit_key)
     hit_params.append(params)
 
