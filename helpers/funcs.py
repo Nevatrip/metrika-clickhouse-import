@@ -30,6 +30,10 @@ def table_fields(params: list[tuple[str, str, str]]):
     """Получить список имён полей таблицы clickhouse"""
     return [p[2] for p in params]
 
+def metrika_fields(params: list[tuple[str, str, str]]):
+    """Получить список имён полей таблицы clickhouse"""
+    return [p[0] for p in params]
+
 def divide_yandex_params(params: list[tuple[str, str, str]], limit: int = 3000, added_params: list[tuple[str, str, str]] = []):
     """Получить генератор, выдающий индексы для разделения параметров запроса к метрике с учётом дополнительных параметров, включённых во все запросы"""
     for p in added_params:
@@ -43,7 +47,7 @@ def divide_yandex_params(params: list[tuple[str, str, str]], limit: int = 3000, 
     last_index = 0
 
     for p in params:
-        char_count += len(p[0])
+        char_count += len(p[0]) + 1 # Ещё один для запятой
 
         if char_count <= limit:
             last_index += 1
@@ -54,12 +58,12 @@ def divide_yandex_params(params: list[tuple[str, str, str]], limit: int = 3000, 
             yield (first_index, last_index)
 
             first_index = last_index
-            char_count = 0
+            last_index += 1
+            char_count = len(p[0])
 
     if first_index == last_index:
         raise Exception('Too long parameter')
     yield (first_index, last_index)
-
 
 def get_init_dates(date: str, period_days: int):
     DAY_SECONDS = 24 * 3600
@@ -74,6 +78,7 @@ def get_init_dates(date: str, period_days: int):
     last_date = dt.date.fromtimestamp(min(yesterday, after_period))
 
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
+
 def get_next_dates(date: str, period_days: int):
     day_delta = dt.timedelta(days=1)
 
@@ -87,4 +92,41 @@ def get_next_dates(date: str, period_days: int):
     last_date = dt.date.fromtimestamp(min(today, after_period))
 
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
+
+def check_request_status(status: str):
+    success = ['processed']
+    wait = ['created']
+
+    if status in success:
+        return True
+    elif status in wait:
+        return False
+    
+    return None
+
+def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields: list[list[tuple[str, str, str]]], primary_key: str):
+    q = f"INSERT INTO TABLE {main_table_name} "
+
+    statements: list[str] = []
+
+    for l in tables_fields:
+        for p in table_fields(l):
+            statements.append(p)
+
+    q += '(' + ', '.join(statements) + ')'
+    q += " SELECT "
+
+    statements: list[str] = []
+
+    for table, fields in zip(table_names, tables_fields):
+        for field in fields:
+            statements.append(f"{table}.{field[2]} AS {field[2]}")
+
+    q += ', '.join(statements)
+    q += f" FROM {table_names[0]} "
+
+    for i in range(1, len(table_names)):
+        q += f"JOIN {table_names[i]} ON {table_names[i - 1]}.{primary_key} = {table_names[i]}.{primary_key} "
+
+    return q
 
