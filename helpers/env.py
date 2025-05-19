@@ -20,6 +20,7 @@ MAIN_HIT_PRIMATY_KEYS = 'MAIN_HIT_PRIMATY_KEYS'
 FIRST_DATE = 'FIRST_DATE'
 DATE_FILE = 'DATE_FILE'
 DAY_COUNT = 'DAY_COUNT' 
+LOG_ENABLE = 'LOG_ENABLE'
 
 __values: dict[str, str | None] = {
     CLICKHOUSE_HOST: 'localhost',
@@ -51,6 +52,8 @@ __values: dict[str, str | None] = {
     MAIN_HIT_PRIMATY_KEYS: 'clientID',
 
     ATTRIBUTIONS: 'AUTOMATIC CROSS_DEVICE_LAST CROSS_DEVICE_LAST_YANDEX_DIRECT_CLICK CROSS_DEVICE_FIRST CROSS_DEVICE_LAST_SIGNIFICANT',
+
+    LOG_ENABLE: 'false',
 
     **dotenv_values('.env', verbose=False),
 }

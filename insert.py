@@ -11,6 +11,13 @@ from helpers import chosen_hit_params as chp, chosen_visit_params as cvp, funcs
 def loggers(s: str):
     print(s)
 
+def no_loggers(s: str):
+    pass
+
+log_func = no_loggers
+if env_value_or_error(env.LOG_ENABLE) == 'true':
+    log_func = loggers
+
 insert_client = cc.get_client(host=env_value_or_error(env.CLICKHOUSE_HOST), username=env_value_or_error(env.CLICKHOUSE_USER), password=env_value_or_error(env.CLICKHOUSE_PASSWORD))
 join_client = cd.Client(host=env_value_or_error(env.CLICKHOUSE_HOST), user=env_value_or_error(env.CLICKHOUSE_USER), password=env_value_or_error(env.CLICKHOUSE_PASSWORD))
 
@@ -20,7 +27,7 @@ with open(env_value_or_error(env.DATE_FILE)) as f:
 if len(dates) != 2:
     raise Exception('INVALID DATES')
 
-loggers(f"STARTING TO IMPORT DATES FROM {dates[0]} TO {dates[1]}")
+log_func(f"STARTING TO IMPORT DATES FROM {dates[0]} TO {dates[1]}")
 
 headers = {
     'Authorization': f"OAuth {env_value_or_error(env.METRIKA_KEY)}"
@@ -55,13 +62,13 @@ for i1, i2 in funcs.divide_yandex_params(cvp.params, int(env_value_or_error(env.
     params = cvp.params[i1:i2]
     orig_visit_params.append(params)
 
-loggers('VISITS DIVIDED')
+log_func('VISITS DIVIDED')
 
 for i1, i2 in funcs.divide_yandex_params(chp.params, int(env_value_or_error(env.METRIKA_CHAR_LIMIT)), [hit_key]):
     params = chp.params[i1:i2]
     orig_hit_params.append(params)
 
-loggers('HITS DIVIDED')
+log_func('HITS DIVIDED')
 
 visit_params = copy.deepcopy(orig_visit_params)
 hit_params = copy.deepcopy(orig_hit_params)
@@ -77,7 +84,7 @@ orig_hit_params[0].append(hit_key)
 
 counter_id = int(env_value_or_error(env.METRIKA_COUNTER))
 
-loggers('STARTING TO IMPORT VISITS')
+log_func('STARTING TO IMPORT VISITS')
 funcs.insert_data(
     attributions,
     'visits',
@@ -92,10 +99,10 @@ funcs.insert_data(
     join_client,
     orig_visit_params,
     visit_key[2],
-    loggers,
+    log_func,
 )
 
-loggers('STARTING TO IMPORT HITS')
+log_func('STARTING TO IMPORT HITS')
 funcs.insert_data(
     attributions,
     'hits',
@@ -110,7 +117,7 @@ funcs.insert_data(
     join_client,
     orig_hit_params,
     hit_key[2],
-    loggers
+    log_func
 )
 
 day_count = int(env_value_or_error(env.DAY_COUNT))
