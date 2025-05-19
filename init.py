@@ -64,5 +64,5 @@ for q in funcs.create_table_queries(main_hit_prefix, all_hit_params, main_hit_ke
     client.execute(q)
 
 with open(env_value_or_error(env.DATE_FILE), 'w') as f:
-    f.write(funcs.get_init_dates(env_value_or_error(env.FIRST_DATE), 97))
+    f.write(funcs.get_init_dates(env_value_or_error(env.FIRST_DATE), 90))
 

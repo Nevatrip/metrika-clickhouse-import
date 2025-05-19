@@ -59,7 +59,9 @@ def env_value_or_error(key: str) -> str:
     if val is None:
         raise Exception('UNDEFINED KEY')
 
-    if val.strip() == '':
+    val = val.strip()
+
+    if val == '':
         raise Exception('UNDEFINED KEY')
 
     return val

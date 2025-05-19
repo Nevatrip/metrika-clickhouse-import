@@ -15,7 +15,7 @@ insert_client = cc.get_client(host=env_value_or_error(env.CLICKHOUSE_HOST), user
 join_client = cd.Client(host=env_value_or_error(env.CLICKHOUSE_HOST), user=env_value_or_error(env.CLICKHOUSE_USER), password=env_value_or_error(env.CLICKHOUSE_PASSWORD))
 
 with open(env_value_or_error(env.DATE_FILE)) as f:
-    dates = f.readline().split(',')
+    dates = f.readline().strip().split(',')
 
 if len(dates) != 2:
     raise Exception('INVALID DATES')
