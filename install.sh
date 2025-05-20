@@ -1,5 +1,7 @@
 #!/bin/bash
 
+pushd "$(dirname "$0")"
+
 mkdir -p ./binary
 pushd ./binary
 
@@ -34,5 +36,6 @@ do
     "$PKG-$VERSION/install/doinst.sh" configure
 done
 
+popd
 popd
 
