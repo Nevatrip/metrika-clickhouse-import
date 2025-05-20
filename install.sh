@@ -37,8 +37,8 @@ do
 done
 
 clickhouse install -y \
-    --user clickhouse \
-    --group clickhouse \
+    --user root \
+    --group root \
     --pid-path /var/run/clickhouse-server \
     --config-path /etc/clickhouse-server \
     --binary-path /usr/bin \
