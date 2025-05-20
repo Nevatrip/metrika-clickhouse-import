@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 from clickhouse_driver import Client
 from helpers.env import env_value_or_error
 import helpers.env as env
@@ -65,6 +66,8 @@ for q in funcs.create_table_queries(main_hit_prefix, all_hit_params, main_hit_ke
 
 day_count = int(env_value_or_error(env.DAY_COUNT))
 
-with open(env_value_or_error(env.DATE_FILE), 'w') as f:
+datefile = os.path.dirname(os.path.realpath(__file__)) + '/' + env_value_or_error(env.DATE_FILE)
+
+with open(datefile, 'w') as f:
     f.write(funcs.get_init_dates(env_value_or_error(env.FIRST_DATE), day_count))
 

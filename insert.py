@@ -3,6 +3,7 @@
 import clickhouse_driver as cd
 import clickhouse_connect as cc
 import copy
+import os
 
 from helpers.env import env_value_or_error
 import helpers.env as env
@@ -21,7 +22,9 @@ if env_value_or_error(env.LOG_ENABLE) == 'true':
 insert_client = cc.get_client(host=env_value_or_error(env.CLICKHOUSE_HOST), username=env_value_or_error(env.CLICKHOUSE_USER), password=env_value_or_error(env.CLICKHOUSE_PASSWORD))
 join_client = cd.Client(host=env_value_or_error(env.CLICKHOUSE_HOST), user=env_value_or_error(env.CLICKHOUSE_USER), password=env_value_or_error(env.CLICKHOUSE_PASSWORD))
 
-with open(env_value_or_error(env.DATE_FILE)) as f:
+datefile = os.path.dirname(os.path.realpath(__file__)) + '/' + env_value_or_error(env.DATE_FILE)
+
+with open(datefile) as f:
     dates = f.readline().strip().split(',')
 
 if len(dates) != 2:
@@ -122,6 +125,6 @@ funcs.insert_data(
 
 day_count = int(env_value_or_error(env.DAY_COUNT))
 
-with open(env_value_or_error(env.DATE_FILE), 'w') as f:
+with open(datefile, 'w') as f:
     f.write(funcs.get_next_dates(dates[1], day_count))
 
