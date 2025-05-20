@@ -33,8 +33,17 @@ done
 
 for PKG in $PKGS
 do
-    "$PKG-$VERSION/install/doinst.sh" configure
+    "$PKG-$VERSION/install/doinst.sh"
 done
+
+clickhouse install -y \
+    --user clickhouse \
+    --group clickhouse \
+    --pid-path /var/run/clickhouse-server \
+    --config-path /etc/clickhouse-server \
+    --binary-path /usr/bin \
+    --log-path /var/log/clickhouse-server \
+    --data-path /var/lib/clickhouse
 
 popd
 popd
