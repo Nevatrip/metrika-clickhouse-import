@@ -1,4 +1,5 @@
 from dotenv import dotenv_values
+import os
 
 CLICKHOUSE_HOST = 'CLICKHOUSE_HOST' 
 CLICKHOUSE_USER = 'CLICKHOUSE_USER' 
@@ -55,7 +56,7 @@ __values: dict[str, str | None] = {
 
     LOG_ENABLE: 'false',
 
-    **dotenv_values('.env', verbose=False),
+    **dotenv_values(os.path.dirname(os.path.realpath(__file__)) + '/../.env', verbose=False),
 }
 
 def env_value_or_error(key: str) -> str:
