@@ -97,5 +97,8 @@ SELECT * FROM <clickhouse_table> JOIN <virtual_mysql_table> ON <clickhouse_table
 ## cloud-init
 
 Скрипт cloud-init находится в файле `clickhouse.sh` без паролей.
-Легче всего сгенерировать через `passgen.sh` и вставить вместо `__PASSWORD__` и `__SHA256_PASSWORD__`
+Легче всего сгенерировать через `passgen.sh` и вставить вместо `__PASSWORD__` и `__SHA256_PASSWORD__`.
+
+Также не забыть заполнить номер счётчика и ключ к API метрики.
+`__METRIKA_COUNTER__` и `__METRIKA_KEY__` соответственно.
 

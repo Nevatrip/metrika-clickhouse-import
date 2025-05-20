@@ -15,9 +15,12 @@ packages:
 write_files:
   - path: /opt/clickhouse/.env
     content: |
-      FIRST_DATE='2025-02-08'
+      FIRST_DATE='2025-01-01'
       CLICKHOUSE_USER=default
       CLICKHOUSE_PASSWORD="__PASSWORD__"
+      METRIKA_COUNTER="__METRIKA_COUNTER__"
+      METRIKA_KEY="__METRIKA_KEY__"
+
   - path: /etc/clickhouse-server/users.d/default-password.xml
     content: |
       <clickhouse>
@@ -36,7 +39,7 @@ write_files:
 
 runcmd:
   - mkdir -p /opt/clickhouse
-  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/5993db2d5fd4b8d569a7640f7cdffc11f072fdb4" >> /opt/clickhouse/import.tgz
+  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/492013e0d848ae7201ffb8f8fdb573174c8e06e0" >> /opt/clickhouse/import.tgz
   - tar -xzf /opt/clickhouse/import.tgz -C /opt/clickhouse --strip-components=1
   - /opt/clickhouse/install.sh
 
