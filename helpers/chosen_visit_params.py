@@ -114,7 +114,7 @@ params = [
     ('ym:s:eventsProductCoupon', 'Array(String)', 'eventsProductCoupon'),
     ('ym:s:eventsProductQuantity', 'Array(UInt64)', 'eventsProductQuantity'),
     ('ym:s:eventsProductEventTime', 'Array(DateTime)', 'eventsProductEventTime'),
-    ('ym:s:eventsProductType', 'Array(UInt8)', 'eventsProductType'),
+    ('ym:s:eventsProductType', 'Array(String)', 'eventsProductType'),
     ('ym:s:eventsProductDiscount', 'Array(String)', 'eventsProductDiscount'),
     ('ym:s:eventsProductName', 'Array(String)', 'eventsProductName'),
     ('ym:s:productsPurchaseID', 'Array(String)', 'productsPurchaseID'),

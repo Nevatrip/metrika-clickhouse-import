@@ -6,6 +6,7 @@ import tempfile as tmp
 import clickhouse_connect.driver.client as cc
 from clickhouse_connect.driver.tools import insert_file
 import clickhouse_driver as cd
+import re
 
 import helpers.urls as urls
 
@@ -143,6 +144,23 @@ def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields
 
     return q
 
+def transform_enum(text: bytes):
+    enum = [
+        'view_item_list',
+        'click',
+        'detail',
+        'add',
+        'purchase',
+        'remove',
+    ]
+
+    for s in enum:
+        pattern = f"(\\[|,){s}".encode()
+        repl = f"\\g<1>'{s}'".encode()
+        text = re.sub(pattern, repl, text)
+
+    return text
+
 def insert_data(
     attributions: list[str],
     source: str, # hits или visits
@@ -219,6 +237,10 @@ def insert_data(
                     # По каким-то причинам в метрике есть и нормальные запятые
                     # И экранированные, из-за этого парсер кликхауса ломается
                     text = downloaded.content.replace('\\\''.encode(), '\''.encode()) 
+
+                    # В колонке eventsProductType приходит массив строк без кавычек
+                    # Приходится регулярными выражениями добалять им кавычки
+                    text = transform_enum(text)
 
                     index = text.find('\n'.encode())
 
