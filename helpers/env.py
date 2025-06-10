@@ -22,8 +22,11 @@ FIRST_DATE = 'FIRST_DATE'
 DATE_FILE = 'DATE_FILE'
 DAY_COUNT = 'DAY_COUNT' 
 LOG_ENABLE = 'LOG_ENABLE'
+PROJECT_NAME = 'PROJECT_NAME'
 
 __values: dict[str, str | None] = {
+    PROJECT_NAME: 'nevatrip',
+
     CLICKHOUSE_HOST: 'localhost',
     CLICKHOUSE_USER: 'root',
     CLICKHOUSE_PASSWORD: 'secret',

@@ -219,6 +219,11 @@ def insert_data(
 
         prefixes = [f"{temp_table_prefix}{str(i + 1)}" for i in range(len(ids))]
 
+        log_func('CLEANING BEFORE INSERT')
+        for t in prefixes:
+            join_client.execute(f"DELETE FROM {t} WHERE 1")
+            log_func(f"CLEANED TEMPORARY TABLE {t}")
+
         for i, id in enumerate(ids):
             log_func(f"INSERTING REQUEST #{id}")
 

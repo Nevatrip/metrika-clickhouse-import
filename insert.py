@@ -25,6 +25,9 @@ join_client = cd.Client(host=env_value_or_error(env.CLICKHOUSE_HOST), user=env_v
 
 datefile = os.path.dirname(os.path.realpath(__file__)) + '/' + env_value_or_error(env.DATE_FILE)
 
+project_name = env_value_or_error(env.PROJECT_NAME)
+log_func(f"IMPORTING PROJECT {project_name}")
+
 with open(datefile) as f:
     dates = f.readline().strip().split(',')
 
