@@ -57,6 +57,26 @@ SELECT * FROM <clickhouse_table> JOIN <virtual_mysql_table> ON <clickhouse_table
 Есть так же возможность подрубить сразу всю базу MySQL, а не только одну таблицу
 <https://clickhouse.com/docs/engines/database-engines/mysql>
 
+## Импорт метрики других проектов и счётчиков
+
+Для импорта метрики из других счётчиков, скопировать репозиторий и повторить шаги ниже
+
+```sh
+export IMPORTER_ARCHIVE="/opt/clickhouse/import.tgz"
+export NEW_CLICKHOUSE_IMPORTER="/opt/clickhouse-project-name"
+```
+
+```sh
+mkdir -p $NEW_CLICKHOUSE_IMPORTER
+tar -xzf $IMPORTER_ARCHIVE -C $NEW_CLICKHOUSE_IMPORTER --strip-components=1
+python3 -m venv "$NEW_CLICKHOUSE_IMPORTER/.venv"
+"$NEW_CLICKHOUSE_IMPORTER/.venv/bin/pip" install -r "$NEW_CLICKHOUSE_IMPORTER/requirements.txt"
+(crontab -l ; echo "0 0 * * * $NEW_CLICKHOUSE_IMPORTER/.venv/bin/python $NEW_CLICKHOUSE_IMPORTER/insert.py 1>> $NEW_CLICKHOUSE_IMPORTER/logs 2>> $NEW_CLICKHOUSE_IMPORTER/logs") | crontab -
+```
+
+После подредактировать `.env` файл в директории из переменной окружения `NEW_CLICKHOUSE_IMPORTER`.
+И crontab подредактировать по вкусу
+
 ## Известные приколы API или почему всё так странно работает?
 
 Из-за ограничения на количество символов в поле `fields` при создании запроса логов запрос приходится разбивать на 2 запроса.

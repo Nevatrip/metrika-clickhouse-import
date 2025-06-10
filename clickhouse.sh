@@ -39,7 +39,7 @@ write_files:
 
 runcmd:
   - mkdir -p /opt/clickhouse
-  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/0818483a0f0def84cdc53e07b5f0f9ec693d4823" >> /opt/clickhouse/import.tgz
+  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/c44ced8d79b3654e824139661552589b1e1c809b" >> /opt/clickhouse/import.tgz
   - tar -xzf /opt/clickhouse/import.tgz -C /opt/clickhouse --strip-components=1
   - /opt/clickhouse/install.sh
 
@@ -51,7 +51,7 @@ runcmd:
   - /opt/clickhouse/.venv/bin/pip install -r /opt/clickhouse/requirements.txt
   - /opt/clickhouse/.venv/bin/python /opt/clickhouse/init.py
 
-  - echo "0 0 * * * /opt/clickhouse/.venv/bin/python /opt/clickhouse/insert.py" | crontab -
+  - echo "0 0 * * * /opt/clickhouse/.venv/bin/python /opt/clickhouse/insert.py 1>> /opt/clickhouse/logs 2>> /opt/clickhouse/logs" | crontab -
 
   # Configure firewall
   - ufw allow 22/tcp  # Keep SSH access
