@@ -4,13 +4,14 @@ import clickhouse_driver as cd
 import clickhouse_connect as cc
 import copy
 import os
+from datetime import datetime as dt
 
 from helpers.env import env_value_or_error
 import helpers.env as env
 from helpers import chosen_hit_params as chp, chosen_visit_params as cvp, funcs
 
 def loggers(s: str):
-    print(s)
+    print(dt.now().isoformat(), s)
 
 def no_loggers(s: str):
     pass
