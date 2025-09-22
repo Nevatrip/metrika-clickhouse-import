@@ -38,12 +38,14 @@ write_files:
       </clickhouse>
   - path: /etc/clickhouse-server/config.d/logs.xml
     content: |
-      <query_log>
-          <ttl>21600</ttl>
-      </query_log>
-      <trace_log>
-          <ttl>21600</ttl>
-      </trace_log>
+      <clickhouse>
+          <query_log>
+              <ttl>21600</ttl>
+          </query_log>
+          <trace_log>
+              <ttl>21600</ttl>
+          </trace_log>
+      </clickhouse>
 
 runcmd:
   - mkdir -p /opt/clickhouse
