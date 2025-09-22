@@ -133,3 +133,26 @@ python3 -m venv "$NEW_CLICKHOUSE_IMPORTER/.venv"
 Также не забыть заполнить номер счётчика и ключ к API метрики.
 `__METRIKA_COUNTER__` и `__METRIKA_KEY__` соответственно.
 
+## Полезные запросы
+
+- Проверить размер системный таблиц
+
+    ```dql
+    SELECT 
+        database,
+        table,
+        formatReadableSize(sum(bytes_on_disk)) as size_on_disk,
+        sum(rows) as rows
+    FROM system.parts 
+    WHERE active = 1
+    GROUP BY database, table
+    ORDER BY sum(bytes_on_disk) DESC;
+    ```
+
+- Получить запросы на оптимизацию таблиц
+    ```dql
+    SELECT 'OPTIMIZE TABLE ' || database || '.' || table || ' FINAL;'
+    FROM system.tables 
+    WHERE engine LIKE '%MergeTree%';
+    ```
+
