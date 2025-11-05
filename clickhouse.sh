@@ -45,6 +45,12 @@ write_files:
           <trace_log>
               <ttl>21600</ttl>
           </trace_log>
+          <text_log>
+              <ttl>21600</ttl>
+          </text_log>
+          <metric_log>
+              <ttl>21600</ttl>
+          </metric_log>
       </clickhouse>
 
 runcmd:
