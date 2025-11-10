@@ -52,8 +52,8 @@ __values: dict[str, str | None] = {
     TEMP_VISIT_KEY: 'ym:s:visitID UInt64 visitID',
     TEMP_HIT_KEY: 'ym:pv:watchID UInt64 watchID',
 
-    MAIN_VISIT_PRIMARY_KEYS: 'clientID',
-    MAIN_HIT_PRIMATY_KEYS: 'clientID',
+    MAIN_VISIT_PRIMARY_KEYS: 'clientID visitID counterID',
+    MAIN_HIT_PRIMATY_KEYS: 'clientID watchID counterID pageViewID',
 
     ATTRIBUTIONS: 'AUTOMATIC CROSS_DEVICE_LAST CROSS_DEVICE_LAST_YANDEX_DIRECT_CLICK CROSS_DEVICE_FIRST CROSS_DEVICE_LAST_SIGNIFICANT',
 
