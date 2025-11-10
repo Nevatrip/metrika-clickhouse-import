@@ -10,15 +10,24 @@ import re
 
 import helpers.urls as urls
 
-def get_table_names(prefix: str, attributions: list[str]|None = None):
+def get_table_names(prefix: str, attributions: list[str]|None = None, part_number: int|None = None):
     """Получить генератор, выдающий имена таблиц clickhouse по атрибуциям"""
     if attributions is None:
-        yield prefix
+        yield get_table_name(prefix, None, part_number)
     else:
         for a in attributions:
-            yield f"{prefix}_{a}"
+            yield get_table_name(prefix, a, part_number)
 
-def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_keys: list[str], attributions: list[str]|None = None):
+def get_table_name(prefix: str, attribution: str|None = None, number: int|None = None):
+    arr = [prefix]
+    if attribution is not None:
+        arr.append(attribution)
+    if number is not None:
+        arr.append(str(number))
+
+    return '_'.join(arr)
+
+def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_keys: list[str], attributions: list[str]|None = None, part_number: int|None = None):
     """Получить генератор, выдающий запросы на создание таблиц clickhouse по агрегациям"""
     attr_list = [f"`{p[2]}` {p[1]}" for p in params]
 
@@ -28,7 +37,7 @@ def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_k
     elif len(tree_keys) > 1:
         order = f"({', '.join(tree_keys)})"
 
-    for table_name in get_table_names(prefix, attributions):
+    for table_name in get_table_names(prefix, attributions, part_number):
         q = f"CREATE TABLE {table_name} ("
         q += ", ".join(attr_list)
         q += f") ENGINE = ReplacingMergeTree ORDER BY {order}"
