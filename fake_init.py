@@ -35,12 +35,12 @@ for i1, i2 in funcs.divide_yandex_params(chp.params, int(env_value_or_error(env.
 
 temp_visit_prefix = f"{env_value_or_error(env.TEMP_DATABASE)}.{env_value_or_error(env.TEMP_VISIT_TABLE_PREFIX)}"
 for i, p in enumerate(visit_params):
-    for q in funcs.create_table_queries(temp_visit_prefix + str(i + 1), p, [visit_key[2]]):
+    for q in funcs.create_table_queries(temp_visit_prefix, p, [visit_key[2]], attributions, i + 1):
         print(q)
 
 temp_hit_prefix = f"{env_value_or_error(env.TEMP_DATABASE)}.{env_value_or_error(env.TEMP_HIT_TABLE_PREFIX)}"
 for i, p in enumerate(hit_params):
-    for q in funcs.create_table_queries(temp_hit_prefix + str(i + 1), p, [hit_key[2]]):
+    for q in funcs.create_table_queries(temp_hit_prefix, p, [hit_key[2]], attributions, i + 1):
         print(q)
 
 all_visit_params = cvp.params
