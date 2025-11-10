@@ -55,7 +55,7 @@ write_files:
 
 runcmd:
   - mkdir -p /opt/clickhouse
-  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/5450ce85b408bb334bf16aa872358911e85028a2" >> /opt/clickhouse/import.tgz
+  - curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/cf42eeb95da1e6e99b52e698b486b401957a0909" >> /opt/clickhouse/import.tgz
   - tar -xzf /opt/clickhouse/import.tgz -C /opt/clickhouse --strip-components=1
   - /opt/clickhouse/install.sh
 
