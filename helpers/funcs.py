@@ -31,7 +31,7 @@ def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_k
     for table_name in get_table_names(prefix, attributions):
         q = f"CREATE TABLE {table_name} ("
         q += ", ".join(attr_list)
-        q += f") ENGINE = MergeTree ORDER BY {order}"
+        q += f") ENGINE = ReplacingMergeTree ORDER BY {order}"
 
         yield q
 
