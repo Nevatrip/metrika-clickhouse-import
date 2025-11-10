@@ -226,12 +226,7 @@ def insert_data(
 
         log_func('ALL READY')
 
-        prefixes = [f"{temp_table_prefix}{str(i + 1)}" for i in range(len(ids))]
-
-        log_func('CLEANING BEFORE INSERT')
-        for t in prefixes:
-            join_client.execute(f"DELETE FROM {t} WHERE 1")
-            log_func(f"CLEANED TEMPORARY TABLE {t}")
+        prefixes = [get_table_name(temp_table_prefix, attr, i + 1) for i in range(len(ids))]
 
         for i, id in enumerate(ids):
             log_func(f"INSERTING REQUEST #{id}")
@@ -241,7 +236,7 @@ def insert_data(
 
             parts = len(body['parts'])
 
-            log_func('TABLE PREFIX = ' + prefixes[i])
+            log_func('TEMPORARY TABLE = ' + prefixes[i])
 
             for part in range(parts):
                 log_func('PART #' + str(part))
@@ -262,7 +257,7 @@ def insert_data(
                     f.flush()
 
                     insert_file(insert_client, prefixes[i], f.name, 'TSV', table_fields(params[i]))
-                    log_func(f"INSERTED PART {part} in table {prefixes[i]}")
+                    log_func(f"INSERTED PART {part} IN TABLE {prefixes[i]}")
 
             resp = rq.post(urls.clean(counter_id, id), headers=request_headers)
             if resp.status_code == 200:
@@ -273,8 +268,4 @@ def insert_data(
         log_func(f"IMPORTING DATA IN TABLE {main_table_names[attr_num]}")
         q = join_temp_tables(main_table_names[attr_num], prefixes, orig_params, temp_primary_key)
         join_client.execute(q)
-
-        for t in prefixes:
-            join_client.execute(f"DELETE FROM {t} WHERE 1")
-            log_func(f"CLEANED TEMPORARY TABLE {t}")
 
