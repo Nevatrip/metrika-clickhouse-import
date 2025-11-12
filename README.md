@@ -59,7 +59,7 @@ SELECT * FROM <clickhouse_table> JOIN <virtual_mysql_table> ON <clickhouse_table
 
 ## Импорт метрики других проектов и счётчиков
 
-Для импорта метрики из других счётчиков, скачать архив репозитория, задать переменные окружения по вкусу
+Для импорта метрики из других счётчиков, задать переменные окружения по вкусу
 
 ```sh
 export IMPORTER_ARCHIVE="/opt/clickhouse/import.tgz"
@@ -69,6 +69,7 @@ export NEW_CLICKHOUSE_IMPORTER="/opt/clickhouse-project-name"
 И повторить шаги ниже
 
 ```sh
+curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/main" >| $IMPORTER_ARCHIVE
 mkdir -p $NEW_CLICKHOUSE_IMPORTER
 tar -xzf $IMPORTER_ARCHIVE -C $NEW_CLICKHOUSE_IMPORTER --strip-components=1
 python3 -m venv "$NEW_CLICKHOUSE_IMPORTER/.venv"
