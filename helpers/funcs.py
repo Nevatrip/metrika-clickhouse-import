@@ -227,6 +227,11 @@ def insert_data(
         log_func('ALL READY')
 
         prefixes = [get_table_name(temp_table_prefix, attr, i + 1) for i in range(len(ids))]
+   
+        log_func('CLEANING BEFORE INSERT')
+        for t in prefixes:
+            join_client.execute(f"TRUNCATE TABLE {t}")
+            log_func(f"CLEANED TEMPORARY TABLE {t}")
 
         for i, id in enumerate(ids):
             log_func(f"INSERTING REQUEST #{id}")
@@ -268,4 +273,8 @@ def insert_data(
         log_func(f"IMPORTING DATA IN TABLE {main_table_names[attr_num]}")
         q = join_temp_tables(main_table_names[attr_num], prefixes, orig_params, temp_primary_key)
         join_client.execute(q)
+
+        for t in prefixes:
+            join_client.execute(f"TRUNCATE TABLE {t}")
+            log_func(f"CLEANED TEMPORARY TABLE {t}")
 
