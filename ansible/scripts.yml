@@ -1,0 +1,60 @@
+---
+- name: Deploy metrika import scripts
+  hosts: clickhouse
+  become: true
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+    - name: Create instance directories
+      file:
+        path: "{{ clickhouse_base_dir }}/{{ item.name }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ instances }}"
+
+    - name: Sync importer to instances
+      synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "{{ clickhouse_base_dir }}/{{ item.name }}/"
+        rsync_opts:
+          - "--exclude=ansible"
+          - "--exclude=.git"
+          - "--exclude=.env"
+          - "--exclude=data"
+          - "--exclude=logs"
+          - "--exclude=dates.txt"
+      loop: "{{ instances }}"
+
+    - name: Deploy .env configs
+      template:
+        src: templates/env.j2
+        dest: "{{ clickhouse_base_dir }}/{{ item.name }}/.env"
+        mode: "0600"
+      loop: "{{ instances }}"
+
+    - name: Create Python virtualenvs
+      command: python3 -m venv --clear {{ clickhouse_base_dir }}/{{ item.name }}/.venv
+      args:
+        creates: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/pip"
+      loop: "{{ instances }}"
+
+    - name: Install Python dependencies
+      command: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/pip install -r {{ clickhouse_base_dir }}/{{ item.name }}/requirements.txt"
+      loop: "{{ instances }}"
+
+    - name: Run init scripts
+      command: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/python {{ clickhouse_base_dir }}/{{ item.name }}/init.py"
+      args:
+        chdir: "{{ clickhouse_base_dir }}/{{ item.name }}"
+        creates: "{{ clickhouse_base_dir }}/{{ item.name }}/dates.txt"
+      loop: "{{ instances }}"
+
+    - name: Setup cron jobs for daily import
+      cron:
+        name: "metrika import {{ item.name }}"
+        minute: "0"
+        hour: "{{ item.cron_hour }}"
+        job: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/python {{ clickhouse_base_dir }}/{{ item.name }}/insert.py 1>> {{ clickhouse_base_dir }}/{{ item.name }}/logs 2>> {{ clickhouse_base_dir }}/{{ item.name }}/logs"
+      loop: "{{ instances }}"

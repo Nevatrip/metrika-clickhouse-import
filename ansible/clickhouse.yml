@@ -1,0 +1,99 @@
+---
+- name: Install ClickHouse and environment
+  hosts: clickhouse
+  become: true
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - ufw
+          - python3
+          - python3-venv
+          - python3-dev
+          - gcc
+          - cron
+        state: present
+
+    - name: Create base directory
+      file:
+        path: "{{ clickhouse_base_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy ClickHouse install script
+      copy:
+        src: "{{ playbook_dir }}/../install.sh"
+        dest: "{{ clickhouse_base_dir }}/install.sh"
+        mode: "0755"
+
+    - name: Run ClickHouse install script
+      command: "{{ clickhouse_base_dir }}/install.sh"
+      args:
+        chdir: "{{ clickhouse_base_dir }}"
+        creates: /usr/bin/clickhouse
+
+    - name: Deploy ClickHouse password config
+      template:
+        src: templates/default-password.xml.j2
+        dest: /etc/clickhouse-server/users.d/default-password.xml
+        mode: "0644"
+      notify: Restart ClickHouse
+
+    - name: Deploy ClickHouse listen config
+      copy:
+        src: files/listen.xml
+        dest: /etc/clickhouse-server/config.d/listen.xml
+        mode: "0644"
+      notify: Restart ClickHouse
+
+    - name: Deploy ClickHouse logs config
+      copy:
+        src: files/logs.xml
+        dest: /etc/clickhouse-server/config.d/logs.xml
+        mode: "0644"
+      notify: Restart ClickHouse
+
+    - name: Enable and start ClickHouse
+      systemd:
+        name: clickhouse-server
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Allow SSH through UFW
+      ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Allow ClickHouse HTTP through UFW
+      ufw:
+        rule: allow
+        port: "8123"
+        proto: tcp
+
+    - name: Allow ClickHouse native protocol through UFW
+      ufw:
+        rule: allow
+        port: "9000"
+        proto: tcp
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+  handlers:
+    - name: Restart ClickHouse
+      systemd:
+        name: clickhouse-server
+        state: restarted

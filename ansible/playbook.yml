@@ -1,0 +1,3 @@
+---
+- import_playbook: clickhouse.yml
+- import_playbook: scripts.yml

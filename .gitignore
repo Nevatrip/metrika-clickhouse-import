@@ -6,7 +6,6 @@ data
 *.csv
 *.tsv
 .env
-*.xml
 
 binary
 a.py

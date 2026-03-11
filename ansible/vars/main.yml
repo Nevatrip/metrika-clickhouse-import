@@ -1,0 +1,21 @@
+clickhouse_base_dir: /opt/metrika
+clickhouse_version: "25.4.4.25"
+
+clickhouse_password: "{{ vault_clickhouse_password }}"
+clickhouse_password_sha256: "{{ vault_clickhouse_password_sha256 }}"
+
+metrika_key: "{{ vault_metrika_key }}"
+
+instances:
+  - name: nevatrip
+    counter: 28914540
+    first_date: "2025-09-01"
+    cron_hour: 0
+  - name: moskvatrip
+    counter: 41415094
+    first_date: "2025-01-01"
+    cron_hour: 2
+  - name: busguide
+    counter: 41947074
+    first_date: "2025-01-01"
+    cron_hour: 1

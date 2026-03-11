@@ -17,6 +17,24 @@
 
 Дальше просто запульнуть его в `.env` вместе с id счётчика
 
+## Деплой
+
+```sh
+make deploy
+```
+
+Требует `ansible`, `ansible-vault` и файл `~/.ansible_vault_pass` с паролем от vault.
+
+Частичный деплой:
+- `make deploy-clickhouse` — только установка ClickHouse
+- `make deploy-scripts` — только скрипты импорта
+
+Секреты хранятся в `ansible/vars/vault.yml` (зашифровано). Для редактирования:
+```sh
+make decrypt  # расшифровать
+make encrypt  # зашифровать обратно
+```
+
 ## Переменные окружения
 
 Всё описано в комментариях в `.env.example`.
@@ -57,32 +75,20 @@ SELECT * FROM <clickhouse_table> JOIN <virtual_mysql_table> ON <clickhouse_table
 Есть так же возможность подрубить сразу всю базу MySQL, а не только одну таблицу
 <https://clickhouse.com/docs/engines/database-engines/mysql>
 
-## Импорт метрики других проектов и счётчиков
+## Добавление нового счётчика
 
-Для импорта метрики из других счётчиков, задать переменные окружения по вкусу
+Добавить инстанс в `ansible/vars/main.yml` в массив `instances`:
 
-```sh
-export IMPORTER_ARCHIVE="/opt/clickhouse/import.tgz"
-export NEW_CLICKHOUSE_IMPORTER="/opt/clickhouse-project-name"
+```yaml
+instances:
+  - name: my-project
+    counter: 12345678
+    first_date: "2025-01-01"
+    cron_hour: 3
 ```
 
-И повторить шаги ниже
-
-```sh
-curl -L "https://github.com/Nevatrip/metrika-clickhouse-import/tarball/main" >| $IMPORTER_ARCHIVE
-mkdir -p $NEW_CLICKHOUSE_IMPORTER
-tar -xzf $IMPORTER_ARCHIVE -C $NEW_CLICKHOUSE_IMPORTER --strip-components=1
-python3 -m venv "$NEW_CLICKHOUSE_IMPORTER/.venv"
-"$NEW_CLICKHOUSE_IMPORTER/.venv/bin/pip" install -r "$NEW_CLICKHOUSE_IMPORTER/requirements.txt"
-(crontab -l ; echo "0 0 * * * $NEW_CLICKHOUSE_IMPORTER/.venv/bin/python $NEW_CLICKHOUSE_IMPORTER/insert.py 1>> $NEW_CLICKHOUSE_IMPORTER/logs 2>> $NEW_CLICKHOUSE_IMPORTER/logs") | crontab -
-```
-
-После подредактировать `.env` файл в директории из переменной окружения `NEW_CLICKHOUSE_IMPORTER`.
-И crontab подредактировать по вкусу.
-Не забыть и про файл дат (`dates.txt` по-умолчанию). В нём только одна строка из двух дат в формате YYYY-MM-DD через запятую.
-`init.py` запускать только аккуратно, не забыв, что он дропает базы данных указанные в переменных окружения `MAIN_DATABASE` и `TEMP_DATABASE`.
-Лучше использовать для файла дат `fake_init.py`.
-Также нужно помнить, что скрипт вставки очищает временные таблицы как перед вставкой, так и после. Из добрых побуждений советую организовать базы данных или crontab так, чтобы скрипты друг друга не чистили.
+Добавить секреты если нужен отдельный `metrika_key` — в `vault.yml`.
+После запустить `make deploy-scripts`.
 
 ## Известные приколы API или почему всё так странно работает?
 
@@ -127,14 +133,6 @@ python3 -m venv "$NEW_CLICKHOUSE_IMPORTER/.venv"
 ### install.sh
 
 Скрипт установки кликхауса
-
-## cloud-init
-
-Скрипт cloud-init находится в файле `clickhouse.sh` без паролей.
-Легче всего сгенерировать через `passgen.sh` и вставить вместо `__PASSWORD__` и `__SHA256_PASSWORD__`.
-
-Также не забыть заполнить номер счётчика и ключ к API метрики.
-`__METRIKA_COUNTER__` и `__METRIKA_KEY__` соответственно.
 
 ## Полезные запросы
 
