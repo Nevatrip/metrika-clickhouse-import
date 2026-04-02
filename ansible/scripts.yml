@@ -22,6 +22,7 @@
           - "--exclude=ansible"
           - "--exclude=.git"
           - "--exclude=.env"
+          - "--exclude=bitrix/.env"
           - "--exclude=data"
           - "--exclude=logs"
           - "--exclude=dates.txt"
@@ -36,12 +37,10 @@
 
     - name: Create Python virtualenvs
       command: python3 -m venv --clear {{ clickhouse_base_dir }}/{{ item.name }}/.venv
-      args:
-        creates: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/pip"
       loop: "{{ instances }}"
 
     - name: Install Python dependencies
-      command: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/pip install -r {{ clickhouse_base_dir }}/{{ item.name }}/requirements.txt"
+      command: "{{ clickhouse_base_dir }}/{{ item.name }}/.venv/bin/python3 -m pip install -r {{ clickhouse_base_dir }}/{{ item.name }}/requirements.txt"
       loop: "{{ instances }}"
 
     - name: Run init scripts

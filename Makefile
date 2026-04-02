@@ -11,10 +11,13 @@ deploy-clickhouse:
 deploy-scripts:
 	ansible-playbook -i $(INVENTORY) ansible/scripts.yml --vault-password-file $(VAULT_PASS_FILE)
 
+deploy-bitrix:
+	ansible-playbook -i $(INVENTORY) ansible/bitrix.yml --vault-password-file $(VAULT_PASS_FILE)
+
 encrypt:
 	ansible-vault encrypt $(VAULT_FILE) --vault-password-file $(VAULT_PASS_FILE)
 
 decrypt:
 	ansible-vault decrypt $(VAULT_FILE) --vault-password-file $(VAULT_PASS_FILE)
 
-.PHONY: deploy deploy-clickhouse deploy-scripts encrypt decrypt
+.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix encrypt decrypt

@@ -10,7 +10,7 @@
     - name: Update and upgrade apt packages
       apt:
         update_cache: true
-        upgrade: dist
+        #upgrade: dist
 
     - name: Install required packages
       apt:
@@ -19,6 +19,7 @@
           - ufw
           - python3
           - python3-venv
+          - python3-pip
           - python3-dev
           - gcc
           - cron

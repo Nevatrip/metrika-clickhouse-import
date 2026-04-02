@@ -1,3 +1,4 @@
 ---
 - import_playbook: clickhouse.yml
 - import_playbook: scripts.yml
+- import_playbook: bitrix.yml

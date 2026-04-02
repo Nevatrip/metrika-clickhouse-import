@@ -5,6 +5,7 @@ clickhouse_password: "{{ vault_clickhouse_password }}"
 clickhouse_password_sha256: "{{ vault_clickhouse_password_sha256 }}"
 
 metrika_key: "{{ vault_metrika_key }}"
+bitrix_webhook_url: "{{ vault_bitrix_webhook_url }}"
 
 instances:
   - name: nevatrip

@@ -1,0 +1,51 @@
+---
+- name: Deploy Bitrix24 import scripts
+  hosts: clickhouse
+  become: true
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+    - name: Create scripts directory
+      file:
+        path: /opt/scripts
+        state: directory
+        mode: "0755"
+
+    - name: Sync bitrix directory
+      synchronize:
+        src: "{{ playbook_dir }}/../bitrix/"
+        dest: /opt/scripts/bitrix/
+        rsync_opts:
+          - "--exclude=.env"
+          - "--exclude=logs"
+
+    - name: Sync requirements.txt
+      copy:
+        src: "{{ playbook_dir }}/../requirements.txt"
+        dest: /opt/scripts/requirements.txt
+
+    - name: Create Python virtualenv
+      command: python3 -m venv --clear /opt/scripts/.venv
+
+    - name: Install Python dependencies
+      command: /opt/scripts/.venv/bin/python3 -m pip install -r /opt/scripts/requirements.txt
+
+    - name: Deploy Bitrix .env config
+      template:
+        src: templates/bitrix_env.j2
+        dest: "/opt/scripts/bitrix/.env"
+        mode: "0600"
+
+    - name: Run Bitrix init script
+      command: "/opt/scripts/.venv/bin/python3 /opt/scripts/bitrix/init.py"
+      args:
+        chdir: "/opt/scripts/bitrix"
+
+    - name: Setup cron job for Bitrix24 daily import
+      cron:
+        name: "bitrix import"
+        minute: "0"
+        hour: "3"
+        job: "/opt/scripts/.venv/bin/python3 /opt/scripts/bitrix/insert.py 1>> /opt/scripts/bitrix/logs 2>> /opt/scripts/bitrix/logs"
