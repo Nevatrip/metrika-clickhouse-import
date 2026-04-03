@@ -1,0 +1,52 @@
+---
+- name: Deploy Yogile snapshot import scripts
+  hosts: clickhouse
+  become: true
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+    - name: Create scripts directory
+      file:
+        path: /opt/scripts
+        state: directory
+        mode: "0755"
+
+    - name: Sync yogile directory
+      synchronize:
+        src: "{{ playbook_dir }}/../yogile/"
+        dest: /opt/scripts/yogile/
+        rsync_opts:
+          - "--exclude=.env"
+          - "--exclude=logs"
+          - "--exclude=__pycache__"
+
+    - name: Sync requirements.txt
+      copy:
+        src: "{{ playbook_dir }}/../requirements.txt"
+        dest: /opt/scripts/requirements.txt
+
+    - name: Create Python virtualenv
+      command: python3 -m venv --clear /opt/scripts/.venv
+
+    - name: Install Python dependencies
+      command: /opt/scripts/.venv/bin/python3 -m pip install -r /opt/scripts/requirements.txt
+
+    - name: Deploy Yogile .env config
+      template:
+        src: templates/yogile_env.j2
+        dest: "/opt/scripts/yogile/.env"
+        mode: "0600"
+
+    - name: Run Yogile init script
+      command: "/opt/scripts/.venv/bin/python3 /opt/scripts/yogile/init.py"
+      args:
+        chdir: "/opt/scripts/yogile"
+
+    - name: Setup cron job for Yogile snapshot import
+      cron:
+        name: "yogile snapshot import"
+        minute: "0"
+        hour: "1,13"
+        job: "/opt/scripts/.venv/bin/python3 /opt/scripts/yogile/insert.py 1>> /opt/scripts/yogile/logs 2>> /opt/scripts/yogile/logs"
