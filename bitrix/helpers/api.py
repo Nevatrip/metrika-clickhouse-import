@@ -85,6 +85,9 @@ class BitrixApiClient:
     def fetch_deal_categories(self, log_func=None) -> list[dict]:
         return self.fetch_list('crm.dealcategory.list', {}, log_func)
 
+    def fetch_deal_category_stages(self, category_id: int, log_func=None) -> list[dict]:
+        return self.fetch_list('crm.dealcategory.stage.list', {'id': category_id}, log_func)
+
     def fetch_tasks(self, date_modify_from: str | None, log_func=None) -> list[dict]:
         params: dict = {
             'select': ['ID', 'TITLE', 'STATUS', 'STATUS_CHANGED_DATE',

@@ -239,6 +239,20 @@ insert_client.insert(
 )
 log_func(f"INSERTED {len(categories_rows)} deal categories")
 
+# 1c. Deal category stages — includes system WON/LOSE stages (e.g. C13:WON)
+all_category_ids = [row[0] for row in categories_rows]
+stages_from_categories = []
+for cat_id in all_category_ids:
+    stages = api.fetch_deal_category_stages(cat_id, log_func)
+    stages_from_categories.extend(stages)
+if stages_from_categories:
+    insert_client.insert(
+        f"{db}.bitrix_statuses",
+        [('DEAL_STAGE', _str(s.get('STATUS_ID')), _str(s.get('NAME')), _int(s.get('SORT')), _str(s.get('COLOR'))) for s in stages_from_categories],
+        column_names=STATUSES_COLUMNS,
+    )
+log_func(f"INSERTED {len(stages_from_categories)} deal category stages")
+
 # 2. Field metadata (full refresh)
 fields_by_type: dict[str, dict] = {}
 fields_rows = []
