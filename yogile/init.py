@@ -46,17 +46,31 @@ ORDER BY id
 
 client.execute(f"""
 CREATE TABLE IF NOT EXISTS {db}.yogile_card_titles (
-    id    String,
-    title String
+    id         String,
+    title      String,
+    created_at Nullable(DateTime),
+    board_id   String
 ) ENGINE = ReplacingMergeTree
 ORDER BY id
 """)
+
+client.execute(f"ALTER TABLE {db}.yogile_card_titles ADD COLUMN IF NOT EXISTS created_at Nullable(DateTime)")
+client.execute(f"ALTER TABLE {db}.yogile_card_titles ADD COLUMN IF NOT EXISTS board_id String DEFAULT ''")
 
 client.execute(f"""
 CREATE TABLE IF NOT EXISTS {db}.yogile_columns (
     id       String,
     name     String,
     board_id String
+) ENGINE = ReplacingMergeTree
+ORDER BY id
+""")
+
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.yogile_boards (
+    id         String,
+    name       String,
+    project_id String
 ) ENGINE = ReplacingMergeTree
 ORDER BY id
 """)

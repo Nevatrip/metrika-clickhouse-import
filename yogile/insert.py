@@ -107,6 +107,19 @@ allowed_board_ids: set[str] = {
 }
 log(f'  Found {len(allowed_board_ids)} boards in allowed projects')
 
+board_rows = [
+    (b['id'], b.get('title', ''), b.get('projectId', ''))
+    for b in boards_raw
+    if not b.get('deleted')
+]
+if board_rows:
+    insert_client.insert(
+        f'{db}.yogile_boards',
+        board_rows,
+        column_names=['id', 'name', 'project_id'],
+    )
+log(f'  Upserted {len(board_rows)} boards')
+
 log('Fetching columns...')
 columns_raw = api.fetch_columns()
 column_rows = [
@@ -219,8 +232,20 @@ for task in tasks_raw:
 log(f'  Skipped: {skip_deleted} deleted, {skip_date} before {cards_from}, {skip_project} outside allowed projects')
 
 # Upsert titles (separate lookup table)
+def _created_at(task: dict):
+    ts_ms = task.get('timestamp')
+    if ts_ms is None:
+        return None
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).replace(tzinfo=None, microsecond=0)
+
+column_to_board: dict[str, str] = {
+    c['id']: c.get('boardId', '')
+    for c in columns_raw
+    if not c.get('deleted')
+}
+
 title_rows = [
-    (task['id'], task.get('title', ''))
+    (task['id'], task.get('title', ''), _created_at(task), column_to_board.get(task.get('columnId', ''), ''))
     for task in tasks_raw
     if not task.get('deleted') and task.get('columnId') in allowed_column_ids
 ]
@@ -228,7 +253,7 @@ if title_rows:
     insert_client.insert(
         f'{db}.yogile_card_titles',
         title_rows,
-        column_names=['id', 'title'],
+        column_names=['id', 'title', 'created_at', 'board_id'],
     )
 
 if card_rows:
