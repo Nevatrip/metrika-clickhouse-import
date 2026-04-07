@@ -65,6 +65,7 @@ allowed_projects: set[str] = {
 sp_fe_uuid = env_value_or_error(env.YOGILE_STICKER_SP_FRONTEND)
 sp_be_uuid = env_value_or_error(env.YOGILE_STICKER_SP_BACKEND)
 project_uuid = env_value_or_error(env.YOGILE_STICKER_PROJECT)
+sprint_uuid = env_value_or_error(env.YOGILE_STICKER_SPRINT)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -140,6 +141,15 @@ project_states: dict[str, str] = {
 }
 log(f'  Found {len(project_states)} project states')
 
+log('Fetching sprint sticker states...')
+sprint_sticker = api.fetch_sprint_sticker(sprint_uuid)
+sprint_states: dict[str, str] = {
+    s['id']: s['name']
+    for s in sprint_sticker.get('states', [])
+    if not s.get('deleted')
+}
+log(f'  Found {len(sprint_states)} sprint states')
+
 # ---------------------------------------------------------------------------
 # Step 4: Tasks → card snapshots
 # ---------------------------------------------------------------------------
@@ -177,6 +187,8 @@ for task in tasks_raw:
     stickers = task.get('stickers') or {}
     state_id = stickers.get(project_uuid, '')
     project_name = project_states.get(state_id, '') if state_id else ''
+    sprint_state_id = stickers.get(sprint_uuid, '')
+    sprint_name = sprint_states.get(sprint_state_id, '') if sprint_state_id else ''
 
     if task.get('columnId') not in allowed_column_ids:
         skip_project += 1
@@ -201,6 +213,7 @@ for task in tasks_raw:
         _float(stickers.get(sp_fe_uuid)),
         _float(stickers.get(sp_be_uuid)),
         task.get('assigned') or [],
+        sprint_name,
     ))
 
 log(f'  Skipped: {skip_deleted} deleted, {skip_date} before {cards_from}, {skip_project} outside allowed projects')
@@ -225,7 +238,7 @@ if card_rows:
         column_names=[
             'snapshot_time', 'sprint_number', 'id',
             'task_id', 'task_id_common', 'column_id', 'completed', 'done_time', 'project_name',
-            'sp_frontend', 'sp_backend', 'assignee_ids',
+            'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name',
         ],
     )
 

@@ -28,10 +28,13 @@ CREATE TABLE IF NOT EXISTS {db}.yogile_cards (
     project_name   String,
     sp_frontend    Float64,
     sp_backend     Float64,
-    assignee_ids   Array(String)
+    assignee_ids   Array(String),
+    sprint_name    String
 ) ENGINE = MergeTree
 ORDER BY (toDate(snapshot_time), id)
 """)
+
+client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS sprint_name String DEFAULT ''")
 
 client.execute(f"""
 CREATE TABLE IF NOT EXISTS {db}.yogile_users (

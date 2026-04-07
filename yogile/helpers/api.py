@@ -67,3 +67,7 @@ class YogileApiClient:
     def fetch_string_sticker(self, sticker_id: str) -> dict:
         """Fetch a single string sticker with its states."""
         return self._get(f'/api-v2/string-stickers/{sticker_id}')
+
+    def fetch_sprint_sticker(self, sticker_id: str) -> dict:
+        """Fetch a single sprint sticker with its states."""
+        return self._get(f'/api-v2/sprint-stickers/{sticker_id}')
