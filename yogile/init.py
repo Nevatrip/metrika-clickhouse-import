@@ -75,4 +75,15 @@ CREATE TABLE IF NOT EXISTS {db}.yogile_boards (
 ORDER BY id
 """)
 
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.yogile_sprint_names (
+    sprint_number UInt32,
+    sprint_name   String,
+    sprint_begin  DateTime
+) ENGINE = ReplacingMergeTree
+ORDER BY sprint_number
+""")
+
+client.execute(f"ALTER TABLE {db}.yogile_sprint_names ADD COLUMN IF NOT EXISTS sprint_begin DateTime DEFAULT toDateTime(0)")
+
 print("Tables created successfully")

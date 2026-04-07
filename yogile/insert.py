@@ -163,6 +163,28 @@ sprint_states: dict[str, str] = {
 }
 log(f'  Found {len(sprint_states)} sprint states')
 
+sprint_name_rows = []
+for s in sprint_sticker.get('states', []):
+    if s.get('deleted'):
+        continue
+    begin_ts = s.get('begin')
+    end_ts = s.get('end')
+    if begin_ts is None or end_ts is None:
+        continue
+    begin_dt = datetime.fromtimestamp(begin_ts / 1000, tz=timezone.utc).replace(tzinfo=None)
+    end_dt = datetime.fromtimestamp(end_ts / 1000, tz=timezone.utc).replace(tzinfo=None)
+    num = calc_sprint_number(end_dt, sprint_start, sprint_length)
+    if num > 0:
+        sprint_name_rows.append((num, s.get('name', ''), begin_dt))
+
+if sprint_name_rows:
+    insert_client.insert(
+        f'{db}.yogile_sprint_names',
+        sprint_name_rows,
+        column_names=['sprint_number', 'sprint_name', 'sprint_begin'],
+    )
+log(f'  Upserted {len(sprint_name_rows)} sprint names')
+
 # ---------------------------------------------------------------------------
 # Step 4: Tasks → card snapshots
 # ---------------------------------------------------------------------------
