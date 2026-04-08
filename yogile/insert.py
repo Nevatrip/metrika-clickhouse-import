@@ -245,8 +245,8 @@ for task in tasks_raw:
         completed,
         done_time,
         project_name,
-        _float(stickers.get(sp_fe_uuid)),
-        _float(stickers.get(sp_be_uuid)),
+        max(0.0, _float(stickers.get(sp_fe_uuid))),
+        max(0.0, _float(stickers.get(sp_be_uuid))),
         task.get('assigned') or [],
         sprint_name,
     ))
