@@ -40,7 +40,7 @@ def create_table_queries(prefix: str, params: list[tuple[str, str, str]], tree_k
     for table_name in get_table_names(prefix, attributions, part_number):
         q = f"CREATE TABLE {table_name} ("
         q += ", ".join(attr_list)
-        q += f") ENGINE = ReplacingMergeTree ORDER BY {order}"
+        q += f") ENGINE = ReplacingMergeTree ORDER BY {order} SETTINGS min_bytes_for_wide_part = 10000000000, min_rows_for_wide_part = 1000000000"
 
         yield q
 
@@ -272,7 +272,12 @@ def insert_data(
 
         log_func(f"IMPORTING DATA IN TABLE {main_table_names[attr_num]}")
         q = join_temp_tables(main_table_names[attr_num], prefixes, orig_params, temp_primary_key)
-        join_client.execute(q)
+        join_client.execute(q, settings={
+            'max_insert_block_size': 100000,
+            'max_compress_block_size': 65536,
+            'max_threads': 1,
+            'max_read_buffer_size': 131072,
+        })
 
         for t in prefixes:
             join_client.execute(f"TRUNCATE TABLE {t}")
