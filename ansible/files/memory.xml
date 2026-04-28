@@ -1,0 +1,4 @@
+<clickhouse>
+    <mark_cache_size>134217728</mark_cache_size>
+    <uncompressed_cache_size>134217728</uncompressed_cache_size>
+</clickhouse>

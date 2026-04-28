@@ -1,5 +1,9 @@
 from collections.abc import Callable
 import datetime as dt
+import heapq
+import itertools
+import os
+import subprocess
 import time
 import requests as rq
 import tempfile as tmp
@@ -104,12 +108,13 @@ def get_next_dates(date: str, period_days: int):
 
     first_date = dt.datetime.fromisoformat(date) + day_delta
 
-    today = time.time()
+    DAY_SECONDS = 24 * 3600
+    yesterday = time.time() - DAY_SECONDS
 
     period_delta = dt.timedelta(days=period_days)
     after_period = (first_date + period_delta).timestamp()
 
-    last_date = dt.date.fromtimestamp(min(today, after_period))
+    last_date = dt.date.fromtimestamp(min(yesterday, after_period))
 
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
 
@@ -126,32 +131,32 @@ def check_request_status(status: str):
     
     return None
 
-def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields: list[list[tuple[str, str, str]]], primary_key: str):
-    """Получить запрос на объединение временных таблиц и вставку данных в постоянную таблицу"""
-    q = f"INSERT INTO TABLE {main_table_name} "
-
-    statements: list[str] = []
-
+def join_temp_tables(main_table_name: str, table_names: list[str], tables_fields: list[list[tuple[str, str, str]]], primary_key: str, bucket: int | None = None, num_buckets: int | None = None):
+    """Получить запрос объединения временных таблиц с опциональной бакетизацией по ключу.
+    При указании bucket/num_buckets обе стороны JOIN фильтруются через cityHash64(pk) % N = bucket,
+    что ограничивает память JOIN."""
+    col_list: list[str] = []
     for l in tables_fields:
         for p in table_fields(l):
-            statements.append(p)
+            col_list.append(p)
 
-    q += '(' + ', '.join(statements) + ')'
-    q += " SELECT "
+    aliases = [f"t{i}" for i in range(len(table_names))]
 
-    statements: list[str] = []
-
-    for table, fields in zip(table_names, tables_fields):
+    select_parts: list[str] = []
+    for alias, fields in zip(aliases, tables_fields):
         for field in fields:
-            statements.append(f"{table}.{field[2]} AS {field[2]}")
+            select_parts.append(f"{alias}.{field[2]} AS {field[2]}")
 
-    q += ', '.join(statements)
-    q += f" FROM {table_names[0]} "
+    where = ""
+    if bucket is not None and num_buckets is not None:
+        where = f" WHERE cityHash64({primary_key}) % {num_buckets} = {bucket}"
 
+    from_clause = f"(SELECT * FROM {table_names[0]}{where}) AS {aliases[0]}"
     for i in range(1, len(table_names)):
-        q += f"JOIN {table_names[i]} ON {table_names[i - 1]}.{primary_key} = {table_names[i]}.{primary_key} "
+        from_clause += f" JOIN (SELECT * FROM {table_names[i]}{where}) AS {aliases[i]}"
+        from_clause += f" ON {aliases[i-1]}.{primary_key} = {aliases[i]}.{primary_key}"
 
-    return q
+    return f"INSERT INTO TABLE {main_table_name} ({', '.join(col_list)}) SELECT {', '.join(select_parts)} FROM {from_clause}"
 
 def transform_enum(text: bytes):
     enum = [
@@ -178,7 +183,6 @@ def insert_data(
     date2: str,
     counter_id: str|int,
     request_headers: dict[str, str], # Обязательно должен быть токен OAuth
-    temp_table_prefix: str,
     main_table_prefix: str,
     insert_client: cc.Client,
     join_client: cd.Client,
@@ -186,8 +190,28 @@ def insert_data(
     temp_primary_key: str,
     log_func: Callable[[str], None],
 ):
-    """Основная функция выгрузки данных"""
+    """Основная функция выгрузки данных.
+    Я (а точнее братишка клод) сделал обработку данных в скрипте,
+    потому что кликхаусу не хватало оперативной памяти для объединения всех частей запроса от метрики"""
     main_table_names = list(get_table_names(main_table_prefix, attributions))
+
+    # Гарантируем compact-формат для основных таблиц
+    # for t in main_table_names:
+    #     join_client.execute(
+    #         f"ALTER TABLE {t} MODIFY SETTING "
+    #         f"min_bytes_for_wide_part = 10000000000, "
+    #         f"min_rows_for_wide_part = 1000000000"
+    #     )
+
+    # Строим упорядоченный список всех колонок основной таблицы
+    all_cols: list[str] = []
+    seen_cols: set[str] = set()
+    for param_set in orig_params:
+        for p in param_set:
+            col = p[2]
+            if col not in seen_cols:
+                all_cols.append(col)
+                seen_cols.add(col)
 
     for attr_num, attr in enumerate(attributions):
         log_func('ATTRIBUTION ' + attr)
@@ -203,9 +227,12 @@ def insert_data(
             }
 
             resp = rq.post(urls.create(counter_id), params=request_params, headers=request_headers)
-            body = resp.json()['log_request']
+            body = resp.json()
 
-            ids.append(body['request_id'])
+            if 'log_request' not in body:
+                raise Exception('Error creating logs request: ' + str(body))
+
+            ids.append(body['log_request']['request_id'])
 
         log_func('CREATED REQUESTS' + str(ids))
 
@@ -226,60 +253,143 @@ def insert_data(
 
         log_func('ALL READY')
 
-        prefixes = [get_table_name(temp_table_prefix, attr, i + 1) for i in range(len(ids))]
-   
-        log_func('CLEANING BEFORE INSERT')
-        for t in prefixes:
-            join_client.execute(f"TRUNCATE TABLE {t}")
-            log_func(f"CLEANED TEMPORARY TABLE {t}")
+        sorted_tmp_files: list[tuple[str, list[str], int]] = []  # (path, ch_cols, pk_pos)
+        tmp_paths: set[str] = set()  # все временные файлы, требующие очистки
+        output_f = None
 
-        for i, id in enumerate(ids):
-            log_func(f"INSERTING REQUEST #{id}")
+        try:
+            # Скачиваем каждый param split в отдельный файл и сортируем по pk
+            for i, id_val in enumerate(ids):
+                ch_cols = table_fields(params[i])
 
-            resp = rq.get(urls.check(counter_id, id), headers=request_headers)
-            body = resp.json()['log_request']
+                if temp_primary_key not in ch_cols:
+                    raise Exception(f"Primary key {temp_primary_key} not found in params[{i}]")
+                pk_pos = ch_cols.index(temp_primary_key)
 
-            parts = len(body['parts'])
+                raw_f = tmp.NamedTemporaryFile('wb', suffix='.tsv', delete=False)
+                raw_path = raw_f.name
+                tmp_paths.add(raw_path)
+                try:
+                    resp = rq.get(urls.check(counter_id, id_val), headers=request_headers)
+                    parts_count = len(resp.json()['log_request']['parts'])
 
-            log_func('TEMPORARY TABLE = ' + prefixes[i])
+                    for part in range(parts_count):
+                        log_func(f"DOWNLOADING REQUEST #{id_val} PART #{part}")
+                        downloaded = rq.get(urls.download(counter_id, id_val, part), headers=request_headers)
 
-            for part in range(parts):
-                log_func('PART #' + str(part))
-                with tmp.NamedTemporaryFile('w+b') as f:
-                    downloaded = rq.get(urls.download(counter_id, id, part), headers=request_headers)
+                        # По каким-то причинам в метрике есть и нормальные запятые
+                        # И экранированные, из-за этого парсер кликхауса ломается
+                        text = downloaded.content.replace(b"\\'", b"'")
 
-                    # По каким-то причинам в метрике есть и нормальные запятые
-                    # И экранированные, из-за этого парсер кликхауса ломается
-                    text = downloaded.content.replace('\\\''.encode(), '\''.encode()) 
+                        # В колонке eventsProductType приходит массив строк без кавычек
+                        # Приходится регулярными выражениями добалять им кавычки
+                        text = transform_enum(text)
 
-                    # В колонке eventsProductType приходит массив строк без кавычек
-                    # Приходится регулярными выражениями добалять им кавычки
-                    text = transform_enum(text)
+                        nl_pos = text.find(b'\n')
+                        if nl_pos == -1:
+                            continue
 
-                    index = text.find('\n'.encode())
+                        for line_bytes in text[nl_pos + 1:].split(b'\n'):
+                            if not line_bytes.strip():
+                                continue
+                            values = line_bytes.decode('utf-8').split('\t')
+                            if len(values) != len(ch_cols):
+                                continue
+                            raw_f.write(line_bytes + b'\n')
 
-                    f.write(text[index + 1:])
-                    f.flush()
+                    raw_f.flush()
+                finally:
+                    raw_f.close()
 
-                    insert_file(insert_client, prefixes[i], f.name, 'TSV', table_fields(params[i]))
-                    log_func(f"INSERTED PART {part} IN TABLE {prefixes[i]}")
+                sorted_path = raw_path + '.sorted'
+                tmp_paths.add(sorted_path)
+                subprocess.run(
+                    ['sort', '-t', '\t', f'-k{pk_pos + 1},{pk_pos + 1}', '-o', sorted_path, raw_path],
+                    check=True
+                )
+                os.unlink(raw_path)
+                tmp_paths.discard(raw_path)
+                sorted_tmp_files.append((sorted_path, ch_cols, pk_pos))
 
-            resp = rq.post(urls.clean(counter_id, id), headers=request_headers)
-            if resp.status_code == 200:
-                log_func(f"CLEANED REQUEST #{id}")
-            else:
-                log_func(f"ERROR CLEANING REQUEST #{id}, STATUS = {resp.status_code}")
+                resp = rq.post(urls.clean(counter_id, id_val), headers=request_headers)
+                if resp.status_code == 200:
+                    log_func(f"CLEANED REQUEST #{id_val}")
+                else:
+                    log_func(f"ERROR CLEANING REQUEST #{id_val}, STATUS = {resp.status_code}")
 
-        log_func(f"IMPORTING DATA IN TABLE {main_table_names[attr_num]}")
-        q = join_temp_tables(main_table_names[attr_num], prefixes, orig_params, temp_primary_key)
-        join_client.execute(q, settings={
-            'max_insert_block_size': 100000,
-            'max_compress_block_size': 65536,
-            'max_threads': 1,
-            'max_read_buffer_size': 131072,
-        })
+            # Merge-sort отсортированных файлов по pk — в памяти одновременно по 1 строке из каждого файла
+            def iter_sorted_tsv(path: str):
+                with open(path, 'r', encoding='utf-8') as fh:
+                    for line in fh:
+                        line = line.rstrip('\n')
+                        if line:
+                            yield line.split('\t')
 
-        for t in prefixes:
-            join_client.execute(f"TRUNCATE TABLE {t}")
-            log_func(f"CLEANED TEMPORARY TABLE {t}")
+            col_lists = [ch_cols for _, ch_cols, _ in sorted_tmp_files]
+            pk_positions = [pk_pos for _, _, pk_pos in sorted_tmp_files]
+            seq = itertools.count()
+
+            def make_tagged(it, idx):
+                for row in it:
+                    yield (row[pk_positions[idx]], idx, next(seq), row)
+
+            file_iters = [iter_sorted_tsv(path) for path, _, _ in sorted_tmp_files]
+            merged_iter = heapq.merge(*[make_tagged(it, i) for i, it in enumerate(file_iters)])
+
+            output_f = tmp.NamedTemporaryFile('w', suffix='.merged.tsv', delete=False, encoding='utf-8')
+            tmp_paths.add(output_f.name)
+
+            rows_count = 0
+            current_pk: str | None = None
+            current_row: dict[str, str] = {}
+
+            for pk_val, file_idx, _, values in merged_iter:
+                if pk_val != current_pk:
+                    if current_pk is not None:
+                        output_f.write('\t'.join(current_row.get(col, '') for col in all_cols) + '\n')
+                        rows_count += 1
+                    current_pk = pk_val
+                    current_row = {}
+                for col, val in zip(col_lists[file_idx], values):
+                    current_row[col] = val
+
+            if current_pk is not None:
+                output_f.write('\t'.join(current_row.get(col, '') for col in all_cols) + '\n')
+                rows_count += 1
+
+            output_f.flush()
+            output_f.close()
+
+            log_func(f"MERGED {rows_count} ROWS ON DISK, IMPORTING INTO {main_table_names[attr_num]}")
+
+            insert_settings = {
+                'async_insert': 0,
+                'max_insert_block_size': 10000,
+                'max_compress_block_size': 65536,
+            }
+
+            join_client.execute("SYSTEM STOP MERGES")
+            for _ in range(60):
+                result = join_client.execute("SELECT count() FROM system.merges")
+                if result[0][0] == 0:
+                    break
+                time.sleep(2)
+
+            try:
+                insert_file(insert_client, main_table_names[attr_num], output_f.name, 'TSV', all_cols, settings=insert_settings)
+            finally:
+                join_client.execute("SYSTEM START MERGES")
+
+            log_func(f"IMPORTED {rows_count} ROWS INTO {main_table_names[attr_num]}")
+            join_client.execute(f"OPTIMIZE TABLE {main_table_names[attr_num]} FINAL")
+            log_func(f"OPTIMIZED {main_table_names[attr_num]}")
+
+        finally:
+            if output_f is not None and not output_f.closed:
+                output_f.close()
+            for path in tmp_paths:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 

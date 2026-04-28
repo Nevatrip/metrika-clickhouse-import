@@ -64,6 +64,13 @@
         mode: "0644"
       notify: Restart ClickHouse
 
+    - name: Deploy ClickHouse memory config
+      copy:
+        src: files/memory.xml
+        dest: /etc/clickhouse-server/config.d/memory.xml
+        mode: "0644"
+      notify: Restart ClickHouse
+
     - name: Enable and start ClickHouse
       systemd:
         name: clickhouse-server
