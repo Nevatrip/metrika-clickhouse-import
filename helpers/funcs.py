@@ -381,7 +381,7 @@ def insert_data(
                 join_client.execute("SYSTEM START MERGES")
 
             log_func(f"IMPORTED {rows_count} ROWS INTO {main_table_names[attr_num]}")
-            join_client.execute(f"OPTIMIZE TABLE {main_table_names[attr_num]} FINAL")
+            join_client.execute(f"OPTIMIZE TABLE {main_table_names[attr_num]} FINAL", settings={'max_execution_time': 1800})
             log_func(f"OPTIMIZED {main_table_names[attr_num]}")
 
         finally:
