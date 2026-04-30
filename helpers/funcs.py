@@ -108,13 +108,12 @@ def get_next_dates(date: str, period_days: int):
 
     first_date = dt.datetime.fromisoformat(date) + day_delta
 
-    DAY_SECONDS = 24 * 3600
-    yesterday = time.time() - DAY_SECONDS
+    today = time.time()
 
     period_delta = dt.timedelta(days=period_days)
     after_period = (first_date + period_delta).timestamp()
 
-    last_date = dt.date.fromtimestamp(min(yesterday, after_period))
+    last_date = dt.date.fromtimestamp(min(today, after_period))
 
     return f"{first_date.date().isoformat()},{last_date.isoformat()}"
 
