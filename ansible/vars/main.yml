@@ -16,7 +16,7 @@ instances:
     counter: 41415094
     first_date: "2025-01-01"
     cron_hour: 2
-  - name: busguide
-    counter: 41947074
-    first_date: "2025-01-01"
-    cron_hour: 1
+  # - name: busguide
+  #   counter: 41947074
+  #   first_date: "2025-01-01"
+  #   cron_hour: 1
