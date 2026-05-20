@@ -174,6 +174,42 @@ def transform_enum(text: bytes):
 
     return text
 
+def default_tsv_value(ch_type: str):
+    """Получить TSV-значение по умолчанию для типа clickhouse"""
+    if ch_type.startswith('Nullable('):
+        return '\\N'
+    if ch_type.startswith('Array('):
+        return '[]'
+    if ch_type == 'String':
+        return ''
+    if ch_type == 'Date':
+        return '1970-01-01'
+    if ch_type == 'DateTime':
+        return '1970-01-01 00:00:00'
+    return '0'
+
+def normalize_tsv_value(ch_type: str, value: str):
+    """Нормализовать TSV-значение под тип clickhouse"""
+    stripped = value.strip()
+
+    if ch_type.startswith('Array('):
+        if stripped.startswith('['):
+            return stripped
+        return '[]'
+
+    if ch_type.startswith('Nullable('):
+        if stripped == '' or stripped == '\\N':
+            return '\\N'
+        return stripped
+
+    if ch_type == 'String':
+        return value
+
+    if stripped == '':
+        return default_tsv_value(ch_type)
+
+    return stripped
+
 def insert_data(
     attributions: list[str],
     source: str, # hits или visits
@@ -211,6 +247,14 @@ def insert_data(
             if col not in seen_cols:
                 all_cols.append(col)
                 seen_cols.add(col)
+
+    col_defaults: dict[str, str] = {}
+    col_types: dict[str, str] = {}
+    for param_set in orig_params:
+        for _, ch_type, col in param_set:
+            if col not in col_defaults:
+                col_defaults[col] = default_tsv_value(ch_type)
+                col_types[col] = ch_type
 
     for attr_num, attr in enumerate(attributions):
         log_func('ATTRIBUTION ' + attr)
@@ -260,6 +304,7 @@ def insert_data(
             # Скачиваем каждый param split в отдельный файл и сортируем по pk
             for i, id_val in enumerate(ids):
                 ch_cols = table_fields(params[i])
+                skipped_rows = 0
 
                 if temp_primary_key not in ch_cols:
                     raise Exception(f"Primary key {temp_primary_key} not found in params[{i}]")
@@ -293,12 +338,16 @@ def insert_data(
                                 continue
                             values = line_bytes.decode('utf-8').split('\t')
                             if len(values) != len(ch_cols):
+                                skipped_rows += 1
                                 continue
                             raw_f.write(line_bytes + b'\n')
 
                     raw_f.flush()
                 finally:
                     raw_f.close()
+
+                if skipped_rows > 0:
+                    log_func(f"SKIPPED {skipped_rows} MALFORMED ROWS IN REQUEST #{id_val}")
 
                 sorted_path = raw_path + '.sorted'
                 tmp_paths.add(sorted_path)
@@ -339,25 +388,32 @@ def insert_data(
             tmp_paths.add(output_f.name)
 
             rows_count = 0
+            normalized_values = 0
             current_pk: str | None = None
             current_row: dict[str, str] = {}
 
             for pk_val, file_idx, _, values in merged_iter:
                 if pk_val != current_pk:
                     if current_pk is not None:
-                        output_f.write('\t'.join(current_row.get(col, '') for col in all_cols) + '\n')
+                        output_f.write('\t'.join(current_row[col] for col in all_cols) + '\n')
                         rows_count += 1
                     current_pk = pk_val
-                    current_row = {}
+                    current_row = {col: col_defaults[col] for col in all_cols}
                 for col, val in zip(col_lists[file_idx], values):
-                    current_row[col] = val
+                    normalized = normalize_tsv_value(col_types[col], val)
+                    if normalized != val:
+                        normalized_values += 1
+                    current_row[col] = normalized
 
             if current_pk is not None:
-                output_f.write('\t'.join(current_row.get(col, '') for col in all_cols) + '\n')
+                output_f.write('\t'.join(current_row[col] for col in all_cols) + '\n')
                 rows_count += 1
 
             output_f.flush()
             output_f.close()
+
+            if normalized_values > 0:
+                log_func(f"NORMALIZED {normalized_values} EMPTY VALUES FOR {main_table_names[attr_num]}")
 
             log_func(f"MERGED {rows_count} ROWS ON DISK, IMPORTING INTO {main_table_names[attr_num]}")
 
@@ -380,8 +436,14 @@ def insert_data(
                 join_client.execute("SYSTEM START MERGES")
 
             log_func(f"IMPORTED {rows_count} ROWS INTO {main_table_names[attr_num]}")
-            join_client.execute(f"OPTIMIZE TABLE {main_table_names[attr_num]} FINAL", settings={'max_execution_time': 1800})
-            log_func(f"OPTIMIZED {main_table_names[attr_num]}")
+            try:
+                join_client.execute(
+                    f"OPTIMIZE TABLE {main_table_names[attr_num]}",
+                    settings={'max_execution_time': 1800}
+                )
+                log_func(f"OPTIMIZED {main_table_names[attr_num]}")
+            except Exception as exc:
+                log_func(f"SKIPPED OPTIMIZE FOR {main_table_names[attr_num]}: {exc}")
 
         finally:
             if output_f is not None and not output_f.closed:
