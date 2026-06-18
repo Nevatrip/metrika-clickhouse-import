@@ -351,5 +351,12 @@ log_func(f"CHECKPOINT SAVED: {run_start}")
 
 # Deduplicate ReplacingMergeTree tables
 for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories'):
-    ch_query.execute(f"OPTIMIZE TABLE {db}.{table} FINAL")
+    try:
+        ch_query.execute(
+            f"OPTIMIZE TABLE {db}.{table} FINAL",
+            settings={'max_execution_time': 1800, 'max_memory_usage': 2000000000},
+        )
+        log_func(f"OPTIMIZED {table}")
+    except Exception as exc:
+        log_func(f"SKIPPED OPTIMIZE FOR {table}: {exc}")
 log_func("OPTIMIZE FINAL done")
