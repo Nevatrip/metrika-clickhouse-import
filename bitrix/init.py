@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS {db}.bitrix_statuses (
     STATUS_ID   String,
     NAME        String,
     SORT        UInt32,
-    COLOR       String
+    COLOR       String,
+    SEMANTICS   String DEFAULT ''
 ) ENGINE = ReplacingMergeTree
 ORDER BY (ENTITY_ID, STATUS_ID)
 """)

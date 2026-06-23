@@ -178,16 +178,25 @@ DEALS_COLUMNS = [
     'UTM_SOURCE', 'UTM_MEDIUM', 'UTM_CAMPAIGN', 'UTM_CONTENT', 'UTM_TERM', 'raw_data',
 ]
 
-def transform_status(r: dict) -> tuple:
+def transform_status(r: dict, semantics: str = '') -> tuple:
+    raw_sem = _str(r.get('SEMANTICS', semantics))
+    # For category stages: derive semantics from STATUS_ID pattern (CX:WON / CX:LOSE)
+    if not raw_sem:
+        sid = _str(r.get('STATUS_ID', ''))
+        if sid.endswith(':WON') or sid == 'WON':
+            raw_sem = 'S'
+        elif sid.endswith(':LOSE') or sid == 'LOSE' or sid.endswith(':APOLOGY') or sid == 'APOLOGY':
+            raw_sem = 'F'
     return (
         _str(r.get('ENTITY_ID')),
         _str(r.get('STATUS_ID')),
         _str(r.get('NAME')),
         _int(r.get('SORT')),
         _str(r.get('COLOR')),
+        raw_sem,
     )
 
-STATUSES_COLUMNS = ['ENTITY_ID', 'STATUS_ID', 'NAME', 'SORT', 'COLOR']
+STATUSES_COLUMNS = ['ENTITY_ID', 'STATUS_ID', 'NAME', 'SORT', 'COLOR', 'SEMANTICS']
 
 def transform_history(r: dict, entity_type_id: int) -> tuple:
     return (
@@ -248,7 +257,7 @@ for cat_id in all_category_ids:
 if stages_from_categories:
     insert_client.insert(
         f"{db}.bitrix_statuses",
-        [('DEAL_STAGE', _str(s.get('STATUS_ID')), _str(s.get('NAME')), _int(s.get('SORT')), _str(s.get('COLOR'))) for s in stages_from_categories],
+        [transform_status({**s, 'ENTITY_ID': 'DEAL_STAGE'}) for s in stages_from_categories],
         column_names=STATUSES_COLUMNS,
     )
 log_func(f"INSERTED {len(stages_from_categories)} deal category stages")
