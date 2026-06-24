@@ -14,10 +14,13 @@ deploy-scripts:
 deploy-bitrix:
 	ansible-playbook -i $(INVENTORY) ansible/bitrix.yml --vault-password-file $(VAULT_PASS_FILE)
 
+deploy-yogile:
+	ansible-playbook -i $(INVENTORY) ansible/yogile.yml --vault-password-file $(VAULT_PASS_FILE)
+
 encrypt:
 	ansible-vault encrypt $(VAULT_FILE) --vault-password-file $(VAULT_PASS_FILE)
 
 decrypt:
 	ansible-vault decrypt $(VAULT_FILE) --vault-password-file $(VAULT_PASS_FILE)
 
-.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix encrypt decrypt
+.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix deploy-yogile encrypt decrypt

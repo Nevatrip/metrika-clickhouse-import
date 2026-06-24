@@ -46,6 +46,19 @@ class YogileApiClient:
     def fetch_tasks(self) -> list[dict]:
         return self.fetch_paginated('/api-v2/task-list')
 
+    def fetch_tasks_in_columns(self, column_ids: list[str]) -> list[dict]:
+        """Fetch tasks per column in visual order, injecting '_card_order' (0-based index within column)."""
+        results: list[dict] = []
+        seen_ids: set[str] = set()
+        for col_id in column_ids:
+            tasks = self.fetch_paginated('/api-v2/task-list', params={'columnId': col_id})
+            for idx, task in enumerate(tasks):
+                if task['id'] not in seen_ids:
+                    task['_card_order'] = idx
+                    seen_ids.add(task['id'])
+                    results.append(task)
+        return results
+
     def fetch_users(self) -> list[dict]:
         return self.fetch_paginated('/api-v2/users')
 

@@ -189,8 +189,8 @@ log(f'  Upserted {len(sprint_name_rows)} sprint names')
 # Step 4: Tasks → card snapshots
 # ---------------------------------------------------------------------------
 
-log('Fetching tasks...')
-tasks_raw = api.fetch_tasks()
+log('Fetching tasks (ordered per column)...')
+tasks_raw = api.fetch_tasks_in_columns(list(allowed_column_ids))
 log(f'  Got {len(tasks_raw)} tasks')
 
 # Load earliest known completion time per card
@@ -249,6 +249,7 @@ for task in tasks_raw:
         max(0.0, _float(stickers.get(sp_be_uuid))),
         task.get('assigned') or [],
         sprint_name,
+        task.get('_card_order', 0),
     ))
 
 log(f'  Skipped: {skip_deleted} deleted, {skip_date} before {cards_from}, {skip_project} outside allowed projects')
@@ -285,7 +286,7 @@ if card_rows:
         column_names=[
             'snapshot_time', 'sprint_number', 'id',
             'task_id', 'task_id_common', 'column_id', 'completed', 'done_time', 'project_name',
-            'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name',
+            'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name', 'card_order',
         ],
     )
 
