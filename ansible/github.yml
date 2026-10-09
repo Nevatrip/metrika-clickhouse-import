@@ -1,0 +1,51 @@
+---
+- name: Deploy GitHub commits import scripts
+  hosts: clickhouse
+  become: true
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+    - name: Create scripts directory
+      file:
+        path: /opt/scripts
+        state: directory
+        mode: "0755"
+
+    - name: Sync github directory
+      synchronize:
+        src: "{{ playbook_dir }}/../github/"
+        dest: /opt/scripts/github/
+        rsync_opts:
+          - "--exclude=.env"
+          - "--exclude=logs"
+          - "--exclude=__pycache__"
+
+    - name: Sync requirements.txt
+      copy:
+        src: "{{ playbook_dir }}/../requirements.txt"
+        dest: /opt/scripts/requirements.txt
+
+    - name: Create Python virtualenv
+      command: python3 -m venv --clear /opt/scripts/.venv
+
+    - name: Install Python dependencies
+      command: /opt/scripts/.venv/bin/python3 -m pip install -r /opt/scripts/requirements.txt
+
+    - name: Deploy GitHub .env config
+      template:
+        src: templates/github_env.j2
+        dest: "/opt/scripts/github/.env"
+        mode: "0600"
+
+    - name: Run GitHub init script
+      command: "/opt/scripts/.venv/bin/python3 /opt/scripts/github/init.py"
+      args:
+        chdir: "/opt/scripts/github"
+
+    - name: Setup cron job for GitHub commits import
+      cron:
+        name: "github commits import"
+        minute: "20"
+        job: "cd /opt/scripts/github && /opt/scripts/.venv/bin/python3 /opt/scripts/github/insert.py 1>> /opt/scripts/github/logs 2>> /opt/scripts/github/logs"

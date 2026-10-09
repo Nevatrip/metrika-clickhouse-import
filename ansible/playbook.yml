@@ -3,3 +3,4 @@
 - import_playbook: scripts.yml
 - import_playbook: bitrix.yml
 - import_playbook: yogile.yml
+- import_playbook: github.yml

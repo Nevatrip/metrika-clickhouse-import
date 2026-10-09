@@ -34,6 +34,8 @@ python3 list_info.py --task <uuid-карточки>
 ### `yogile_cards`
 Снапшоты карточек. Одна строка = одна карточка в один момент времени.
 
+`task_type` — значение стикера «Тип задачи» (напр. `Баг`). UUID стикера задаётся `YOGILE_STICKER_TASK_TYPE`, если пусто — стикер ищется по имени `YOGILE_STICKER_TASK_TYPE_NAME`. В снапшотах до появления колонки поле пустое — актуальное значение брать из последнего снапшота (`argMax(task_type, snapshot_time)`).
+
 Ключевые поля: `snapshot_time`, `sprint_number`, `id`, `title`, `task_id` (напр. `TECH-1834`), `task_id_common` (напр. `ID-484`), `column_id`, `completed`, `project_name`, `sp_frontend`, `sp_backend`, `assignee_ids`.
 
 ---

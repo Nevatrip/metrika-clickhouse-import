@@ -66,6 +66,8 @@ sp_fe_uuid = env_value_or_error(env.YOGILE_STICKER_SP_FRONTEND)
 sp_be_uuid = env_value_or_error(env.YOGILE_STICKER_SP_BACKEND)
 project_uuid = env_value_or_error(env.YOGILE_STICKER_PROJECT)
 sprint_uuid = env_value_or_error(env.YOGILE_STICKER_SPRINT)
+task_type_uuid = env_value_or_default(env.YOGILE_STICKER_TASK_TYPE)
+task_type_name = env_value_or_default(env.YOGILE_STICKER_TASK_TYPE_NAME, 'Тип задачи')
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -154,6 +156,26 @@ project_states: dict[str, str] = {
 }
 log(f'  Found {len(project_states)} project states')
 
+if not task_type_uuid:
+    log(f'YOGILE_STICKER_TASK_TYPE not set, looking up sticker by name "{task_type_name}"...')
+    for s in api.fetch_paginated('/api-v2/string-stickers'):
+        if not s.get('deleted') and s.get('name', '').strip() == task_type_name:
+            task_type_uuid = s['id']
+            break
+
+task_type_states: dict[str, str] = {}
+if task_type_uuid:
+    log('Fetching task type sticker states...')
+    task_type_sticker = api.fetch_string_sticker(task_type_uuid)
+    # deleted-состояния тоже берём: на старых карточках могут остаться
+    task_type_states = {
+        s['id']: s['name']
+        for s in task_type_sticker.get('states', [])
+    }
+    log(f'  Found {len(task_type_states)} task type states ({task_type_uuid})')
+else:
+    log(f'  WARNING: task type sticker "{task_type_name}" not found, task_type will be empty')
+
 log('Fetching sprint sticker states...')
 sprint_sticker = api.fetch_sprint_sticker(sprint_uuid)
 sprint_states: dict[str, str] = {
@@ -224,6 +246,8 @@ for task in tasks_raw:
     project_name = project_states.get(state_id, '') if state_id else ''
     sprint_state_id = stickers.get(sprint_uuid, '')
     sprint_name = sprint_states.get(sprint_state_id, '') if sprint_state_id else ''
+    task_type_state_id = stickers.get(task_type_uuid, '') if task_type_uuid else ''
+    task_type = task_type_states.get(task_type_state_id, '') if task_type_state_id else ''
 
     if task.get('columnId') not in allowed_column_ids:
         skip_project += 1
@@ -250,6 +274,7 @@ for task in tasks_raw:
         task.get('assigned') or [],
         sprint_name,
         task.get('_card_order', 0),
+        task_type,
     ))
 
 log(f'  Skipped: {skip_deleted} deleted, {skip_date} before {cards_from}, {skip_project} outside allowed projects')
@@ -286,7 +311,7 @@ if card_rows:
         column_names=[
             'snapshot_time', 'sprint_number', 'id',
             'task_id', 'task_id_common', 'column_id', 'completed', 'done_time', 'project_name',
-            'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name', 'card_order',
+            'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name', 'card_order', 'task_type',
         ],
     )
 
