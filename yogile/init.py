@@ -37,6 +37,7 @@ ORDER BY (toDate(snapshot_time), id)
 
 client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS sprint_name String DEFAULT ''")
 client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS card_order UInt32 DEFAULT 0")
+client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS task_type String DEFAULT ''")
 
 client.execute(f"""
 CREATE TABLE IF NOT EXISTS {db}.yogile_users (
