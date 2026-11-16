@@ -17,6 +17,9 @@ deploy-bitrix:
 deploy-yogile:
 	ansible-playbook -i $(INVENTORY) ansible/yogile.yml --vault-password-file $(VAULT_PASS_FILE)
 
+deploy-appmetrica:
+	ansible-playbook -i $(INVENTORY) ansible/appmetrica.yml --vault-password-file $(VAULT_PASS_FILE)
+
 encrypt:
 	ansible-vault encrypt $(VAULT_FILE) --vault-password-file $(VAULT_PASS_FILE)
 
@@ -40,4 +43,4 @@ endif
 	@printf "Metrika:    " && curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: OAuth $(TOKEN)" https://api-metrika.yandex.net/management/v1/counters
 	@printf "AppMetrica: " && curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: OAuth $(TOKEN)" https://api.appmetrica.yandex.ru/management/v1/applications
 
-.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix deploy-yogile encrypt decrypt token token-check
+.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix deploy-yogile deploy-appmetrica encrypt decrypt token token-check
