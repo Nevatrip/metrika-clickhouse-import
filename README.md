@@ -17,6 +17,13 @@
 
 Дальше просто запульнуть его в `.env` вместе с id счётчика
 
+Для AppMetrica в правах приложения на <https://oauth.yandex.ru> нужно добавить «Получение статистики, чтение параметров своих и доверенных приложений» (`appmetrica:read`), Redirect URI — `https://oauth.yandex.ru/verification_code`. После изменения прав токен надо перевыпустить.
+
+```sh
+make token CLIENT_ID=<ClientID приложения>   # открыть страницу выдачи токена
+make token-check TOKEN=<токен>               # 200 — доступ есть, 403 — нет прав
+```
+
 ## Деплой
 
 ```sh
@@ -61,7 +68,7 @@ make encrypt  # зашифровать обратно
 <https://clickhouse.com/docs/engines/table-engines/integrations/mysql>
 
 ```dql
-CREATE TABLE <virtual_mysql_table> ENGINE = MySQL('<ip>:<port>', <mysql_database>, <mysql_table>, <mysql_user>, <mysql_password>)
+CREATE TABLE izzyduck ENGINE = MySQL('90.156.224.76:3306', 'izzyduckbot', 'izzyduckbot', 'clickhouse', 'clickhouse')
 ```
 
 После объединить стандартным JOIN
