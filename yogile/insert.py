@@ -66,6 +66,8 @@ sp_fe_uuid = env_value_or_error(env.YOGILE_STICKER_SP_FRONTEND)
 sp_be_uuid = env_value_or_error(env.YOGILE_STICKER_SP_BACKEND)
 project_uuid = env_value_or_error(env.YOGILE_STICKER_PROJECT)
 sprint_uuid = env_value_or_error(env.YOGILE_STICKER_SPRINT)
+task_type_uuid = env_value_or_default(env.YOGILE_STICKER_TASK_TYPE)  # «Тип задачи»: Баг, Плановая задача…
+test_uuid = env_value_or_default(env.YOGILE_STICKER_TEST)            # «Тест»: Тест: критично / после релиза / в отдельную задачу
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -154,6 +156,21 @@ project_states: dict[str, str] = {
 }
 log(f'  Found {len(project_states)} project states')
 
+def _optional_sticker_states(sticker_uuid: str, label: str) -> dict[str, str]:
+    """Состояния необязательного строкового стикера.
+    Удалённые состояния тоже берём: они могут остаться на старых карточках."""
+    if not sticker_uuid:
+        log(f'  {label}: sticker UUID not set, column will be empty')
+        return {}
+    sticker = api.fetch_string_sticker(sticker_uuid)
+    states = {s['id']: s['name'] for s in sticker.get('states', [])}
+    log(f'  {label}: found {len(states)} states')
+    return states
+
+log('Fetching optional sticker states...')
+task_type_states = _optional_sticker_states(task_type_uuid, 'task type')
+test_states = _optional_sticker_states(test_uuid, 'test')
+
 log('Fetching sprint sticker states...')
 sprint_sticker = api.fetch_sprint_sticker(sprint_uuid)
 sprint_states: dict[str, str] = {
@@ -224,6 +241,8 @@ for task in tasks_raw:
     project_name = project_states.get(state_id, '') if state_id else ''
     sprint_state_id = stickers.get(sprint_uuid, '')
     sprint_name = sprint_states.get(sprint_state_id, '') if sprint_state_id else ''
+    task_type = task_type_states.get(stickers.get(task_type_uuid, ''), '') if task_type_uuid else ''
+    test_mark = test_states.get(stickers.get(test_uuid, ''), '') if test_uuid else ''
 
     if task.get('columnId') not in allowed_column_ids:
         skip_project += 1
@@ -250,6 +269,8 @@ for task in tasks_raw:
         task.get('assigned') or [],
         sprint_name,
         task.get('_card_order', 0),
+        task_type,
+        test_mark,
     ))
 
 log(f'  Skipped: {skip_deleted} deleted, {skip_date} before {cards_from}, {skip_project} outside allowed projects')
@@ -287,6 +308,7 @@ if card_rows:
             'snapshot_time', 'sprint_number', 'id',
             'task_id', 'task_id_common', 'column_id', 'completed', 'done_time', 'project_name',
             'sp_frontend', 'sp_backend', 'assignee_ids', 'sprint_name', 'card_order',
+            'task_type', 'test_mark',
         ],
     )
 

@@ -34,7 +34,9 @@ python3 list_info.py --task <uuid-карточки>
 ### `yogile_cards`
 Снапшоты карточек. Одна строка = одна карточка в один момент времени.
 
-Ключевые поля: `snapshot_time`, `sprint_number`, `id`, `title`, `task_id` (напр. `TECH-1834`), `task_id_common` (напр. `ID-484`), `column_id`, `completed`, `project_name`, `sp_frontend`, `sp_backend`, `assignee_ids`.
+Ключевые поля: `snapshot_time`, `sprint_number`, `id`, `title`, `task_id` (напр. `TECH-1834`), `task_id_common` (напр. `ID-484`), `column_id`, `completed`, `project_name`, `sp_frontend`, `sp_backend`, `assignee_ids`, `task_type`, `test_mark`.
+
+`task_type` — значение стикера «Тип задачи» (`Баг`, `Плановая задача`, `Оперативная задача`…), `test_mark` — значение стикера «Тест» (`Тест: критично`, `Тест: после релиза`, `Тест: в отдельную задачу`). UUID стикеров задаются в `YOGILE_STICKER_TASK_TYPE` и `YOGILE_STICKER_TEST`; если переменная пустая, колонка не заполняется. В снапшотах до появления колонок поля пустые — актуальное значение брать из последнего снапшота: `argMax(task_type, snapshot_time)`.
 
 ---
 
@@ -67,4 +69,12 @@ SELECT *
 FROM yogile.yogile_cards
 WHERE snapshot_time = (SELECT max(snapshot_time) FROM yogile.yogile_cards)
 ORDER BY project_name, task_id;
+```
+
+Баги, найденные на тесте (актуальные стикеры по последнему снапшоту):
+```sql
+SELECT task_id, argMax(task_type, snapshot_time) AS type, argMax(test_mark, snapshot_time) AS test
+FROM yogile.yogile_cards
+GROUP BY task_id
+HAVING type = 'Баг' AND test != '';
 ```
