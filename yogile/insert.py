@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 
 import clickhouse_connect as cc
 from clickhouse_driver import Client
@@ -313,3 +313,124 @@ if card_rows:
     )
 
 log(f'Inserted {len(card_rows)} card snapshots at {snapshot_time} (sprint {sprint_number})')
+
+# ---------------------------------------------------------------------------
+# Step 5: Subtasks without column (+ parent → child links)
+# ---------------------------------------------------------------------------
+# Подзадачи, которые не лежат ни в одной колонке (например, баги в карточке
+# «Тестирование …»), не попадают в выгрузку по колонкам. Обходим дерево
+# подзадач от карточек на досках и сохраняем:
+#   yogile_task_links — связи «родитель → подзадача» (для всех карточек);
+#   yogile_subtasks   — сами подзадачи без колонки (без снапшотов, последнее состояние).
+# Каждую подзадачу без колонки приходится запрашивать отдельно, поэтому уже
+# загруженные не перезапрашиваются, кроме незавершённых и созданных
+# за последние YOGILE_SUBTASKS_REFRESH_DAYS дней (у них могут поменяться стикеры).
+# Ошибка на этом шаге не ломает снапшот карточек: он уже записан выше.
+
+def sync_subtasks() -> None:
+    refresh_days = int(env_value_or_default(env.YOGILE_SUBTASKS_REFRESH_DAYS, '30'))
+    if refresh_days < 0:
+        log('Subtasks: disabled (YOGILE_SUBTASKS_REFRESH_DAYS < 0)')
+        return
+    refresh_from = snapshot_time - timedelta(days=refresh_days)
+
+    on_board = {
+        t['id']: t for t in tasks_raw
+        if not t.get('deleted') and t.get('columnId') in allowed_column_ids
+    }
+
+    # Кеш: уже загруженные подзадачи и их известные дети
+    cached: dict[str, tuple[int, datetime | None]] = {
+        row[0]: (row[1], row[2])
+        for row in ch_query.execute(f"SELECT id, completed, created_at FROM {db}.yogile_subtasks FINAL")
+    }
+    cached_children: dict[str, list[str]] = {}
+    for parent_id, child_id in ch_query.execute(f"SELECT parent_id, child_id FROM {db}.yogile_task_links FINAL"):
+        cached_children.setdefault(parent_id, []).append(child_id)
+
+    link_rows: list[tuple] = []
+    subtask_rows: list[tuple] = []
+    queue: list[str] = []
+
+    def add_children(parent_id: str, child_ids: list[str]) -> None:
+        for child_id in child_ids:
+            link_rows.append((parent_id, child_id, snapshot_time))
+            if child_id not in on_board:
+                queue.append(child_id)
+
+    for task in on_board.values():
+        add_children(task['id'], task.get('subtasks') or [])
+
+    visited: set[str] = set()
+    fetched = reused = failed = 0
+    while queue:
+        sub_id = queue.pop()
+        if sub_id in visited:
+            continue
+        visited.add(sub_id)
+
+        cache = cached.get(sub_id)
+        if cache is not None:
+            completed_cached, created_cached = cache
+            fresh = created_cached is not None and created_cached >= refresh_from
+            if completed_cached or not fresh:
+                reused += 1
+                for child_id in cached_children.get(sub_id, []):
+                    if child_id not in on_board:
+                        queue.append(child_id)
+                continue
+
+        try:
+            sub = api.fetch_task(sub_id)
+        except Exception as e:  # удалённая задача, нет доступа, сетевые ошибки
+            failed += 1
+            log(f'  Subtask {sub_id}: fetch failed: {e}')
+            continue
+        fetched += 1
+
+        if sub.get('deleted'):
+            continue
+        if sub.get('columnId'):
+            # Подзадача лежит на доске: если это наш проект, она уже есть
+            # в yogile_cards; из чужого проекта — не выгружаем.
+            continue
+
+        stickers = sub.get('stickers') or {}
+        subtask_rows.append((
+            sub['id'],
+            sub.get('idTaskProject', ''),
+            sub.get('title', ''),
+            _created_at(sub),
+            int(bool(sub.get('completed'))),
+            int(bool(sub.get('archived'))),
+            task_type_states.get(stickers.get(task_type_uuid, ''), '') if task_type_uuid else '',
+            test_states.get(stickers.get(test_uuid, ''), '') if test_uuid else '',
+            snapshot_time,
+        ))
+        add_children(sub['id'], sub.get('subtasks') or [])
+
+    if link_rows:
+        insert_client.insert(
+            f'{db}.yogile_task_links',
+            link_rows,
+            column_names=['parent_id', 'child_id', 'seen_at'],
+        )
+    if subtask_rows:
+        insert_client.insert(
+            f'{db}.yogile_subtasks',
+            subtask_rows,
+            column_names=[
+                'id', 'task_id', 'title', 'created_at', 'completed', 'archived',
+                'task_type', 'test_mark', 'fetched_at',
+            ],
+        )
+    log(
+        f'Subtasks: {len(link_rows)} links, {len(subtask_rows)} column-less subtasks upserted '
+        f'(fetched {fetched}, reused from cache {reused}, failed {failed})'
+    )
+
+log('Syncing subtasks without column...')
+try:
+    sync_subtasks()
+except Exception as e:
+    log(f'  WARNING: subtask sync failed, card snapshot is already saved: {e}')
