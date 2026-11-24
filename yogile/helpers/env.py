@@ -17,6 +17,7 @@ YOGILE_SPRINT_START       = 'YOGILE_SPRINT_START'
 YOGILE_SPRINT_LENGTH_DAYS  = 'YOGILE_SPRINT_LENGTH_DAYS'
 YOGILE_CARDS_FROM          = 'YOGILE_CARDS_FROM'
 YOGILE_PROJECTS            = 'YOGILE_PROJECTS'
+YOGILE_SUBTASKS_REFRESH_DAYS = 'YOGILE_SUBTASKS_REFRESH_DAYS'
 
 __values: dict[str, str | None] = {
     CLICKHOUSE_HOST:           'localhost',
@@ -35,6 +36,7 @@ __values: dict[str, str | None] = {
     YOGILE_SPRINT_LENGTH_DAYS:  '14',
     YOGILE_CARDS_FROM:          None,
     YOGILE_PROJECTS:            None,  # required
+    YOGILE_SUBTASKS_REFRESH_DAYS: '30',  # < 0 — не выгружать подзадачи без колонки
     **dotenv_values(os.path.dirname(os.path.realpath(__file__)) + '/../.env', verbose=False),
 }
 

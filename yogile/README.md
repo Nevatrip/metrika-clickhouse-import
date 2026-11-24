@@ -40,6 +40,22 @@ python3 list_info.py --task <uuid-карточки>
 
 ---
 
+### `yogile_task_links`
+Связи «родитель → подзадача» для карточек на досках и подзадач без колонки. Связи накапливаются: если подзадачу отвязали, старая связь остаётся.
+
+Поля: `parent_id`, `child_id` (UUID карточек), `seen_at` — когда связь видели последний раз.
+
+---
+
+### `yogile_subtasks`
+Подзадачи, которые не лежат ни в одной колонке (например, баги внутри карточки «Тестирование …»). В `yogile_cards` их нет, потому что выгрузка идёт по колонкам. Хранится последнее состояние, без снапшотов.
+
+Поля: `id`, `task_id` (напр. `TECH-1648`), `title`, `created_at`, `completed`, `archived`, `task_type`, `test_mark`, `fetched_at`.
+
+Каждая такая подзадача запрашивается из API отдельно, поэтому первый запуск занимает дольше обычного (около 1,5–2 тыс. запросов, 10–15 минут). Дальше перезапрашиваются только новые подзадачи и незавершённые, созданные за последние `YOGILE_SUBTASKS_REFRESH_DAYS` дней (по умолчанию 30).
+
+---
+
 ### `yogile_users`
 Справочник исполнителей. Обновляется при каждом запуске.
 
@@ -77,4 +93,13 @@ SELECT task_id, argMax(task_type, snapshot_time) AS type, argMax(test_mark, snap
 FROM yogile.yogile_cards
 GROUP BY task_id
 HAVING type = 'Баг' AND test != '';
+```
+
+Подзадачи карточки «Тестирование …» (один уровень вложенности):
+```sql
+SELECT s.task_id, s.title, s.task_type, s.test_mark, s.completed
+FROM yogile.yogile_task_links AS l FINAL
+JOIN yogile.yogile_card_titles AS p ON p.id = l.parent_id
+JOIN yogile.yogile_subtasks AS s FINAL ON s.id = l.child_id
+WHERE p.title ILIKE 'Тестирование%';
 ```

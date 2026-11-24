@@ -41,6 +41,30 @@ client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS task_typ
 client.execute(f"ALTER TABLE {db}.yogile_cards ADD COLUMN IF NOT EXISTS test_mark String DEFAULT ''")
 
 client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.yogile_task_links (
+    parent_id String,
+    child_id  String,
+    seen_at   DateTime
+) ENGINE = ReplacingMergeTree(seen_at)
+ORDER BY (parent_id, child_id)
+""")
+
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.yogile_subtasks (
+    id         String,
+    task_id    String,
+    title      String,
+    created_at Nullable(DateTime),
+    completed  UInt8,
+    archived   UInt8,
+    task_type  String,
+    test_mark  String,
+    fetched_at DateTime
+) ENGINE = ReplacingMergeTree(fetched_at)
+ORDER BY id
+""")
+
+client.execute(f"""
 CREATE TABLE IF NOT EXISTS {db}.yogile_users (
     id   String,
     name String
