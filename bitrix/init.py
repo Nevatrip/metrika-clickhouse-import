@@ -127,4 +127,23 @@ CREATE TABLE IF NOT EXISTS {db}.bitrix_checkpoint (
 ORDER BY entity
 """)
 
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.bitrix_workdays (
+    USER_ID        UInt32                                COMMENT 'ID сотрудника в Битриксе',
+    USER_NAME      String                                COMMENT 'Имя Фамилия',
+    WORK_POSITION  String                                COMMENT 'Должность',
+    DEPARTMENT     String                                COMMENT 'Подразделение',
+    WORK_DATE      Date                                  COMMENT 'Дата смены (по дню начала)',
+    DATE_START     DateTime('Europe/Moscow')             COMMENT 'Начало смены',
+    DATE_FINISH    Nullable(DateTime('Europe/Moscow'))   COMMENT 'Конец смены, NULL пока день открыт',
+    IS_COMPLETE    UInt8                                 COMMENT '1 = день закрыт',
+    DURATION_SEC   UInt32                                COMMENT 'От начала до конца смены, сек',
+    PAUSE_SEC      UInt32                                COMMENT 'Перерывы, отмеченные сотрудником, сек',
+    WORK_SEC       UInt32                                COMMENT 'Рабочее время = смена - перерывы, сек',
+    ACTIVE_SEC     UInt32                                COMMENT 'Время по контролю активности Битрикса, сек',
+    updated_at     DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (USER_ID, WORK_DATE)
+""")
+
 print("Tables created successfully")

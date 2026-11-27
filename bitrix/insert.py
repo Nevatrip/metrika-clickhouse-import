@@ -358,8 +358,84 @@ log_func(f"INSERTED {len(history_rows)} stage history records (from={history_fro
 save_checkpoint(['leads', 'deals', 'stage_history'], run_start)
 log_func(f"CHECKPOINT SAVED: {run_start}")
 
+# 7. Worktime (timeman). Перезаписываем последние месяцы целиком,
+#    при пустой таблице — подтягиваем историю за WORKDAYS_HISTORY_MONTHS.
+WORKDAYS_HISTORY_MONTHS = 12
+WORKDAYS_REFRESH_MONTHS = 2
+
+def _months_back(n: int) -> list[tuple[int, int]]:
+    today = datetime.now()
+    y, m = today.year, today.month
+    res = []
+    for _ in range(n):
+        res.append((y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return res
+
+def _sec(val) -> int:
+    return max(_int(val), 0)
+
+def _local_dt(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return None
+
+def transform_workday(d: dict, user: dict, departments: dict[int, str]) -> tuple | None:
+    start = _local_dt(d.get('workday_date_start'))
+    if start is None:
+        return None
+    complete = bool(d.get('workday_complete'))
+    finish = _local_dt(d.get('workday_date_finish')) if complete else None
+    duration = _sec(d.get('workday_duration'))
+    pause = _sec(d.get('workday_time_leaks_user'))
+    name = ' '.join(p for p in (_str(user.get('NAME')).strip(), _str(user.get('LAST_NAME')).strip()) if p)
+    dep_ids = user.get('UF_DEPARTMENT') or []
+    dep = ', '.join(departments.get(_int(i), '') for i in dep_ids if departments.get(_int(i)))
+    return (
+        _int(user.get('ID')),
+        name,
+        _str(user.get('WORK_POSITION')),
+        dep,
+        datetime.strptime(d['index'], '%Y%m%d').date(),
+        start,
+        finish,
+        1 if complete else 0,
+        duration,
+        pause,
+        max(duration - pause, 0),
+        _sec(d.get('workday_duration_final')),
+    )
+
+WORKDAYS_COLUMNS = [
+    'USER_ID', 'USER_NAME', 'WORK_POSITION', 'DEPARTMENT', 'WORK_DATE', 'DATE_START',
+    'DATE_FINISH', 'IS_COMPLETE', 'DURATION_SEC', 'PAUSE_SEC', 'WORK_SEC', 'ACTIVE_SEC',
+]
+
+try:
+    has_workdays = ch_query.execute(f"SELECT count() FROM {db}.bitrix_workdays")[0][0] > 0
+    months = _months_back(WORKDAYS_REFRESH_MONTHS if has_workdays else WORKDAYS_HISTORY_MONTHS)
+    users = api.fetch_users(log_func)
+    departments = api.fetch_departments(log_func)
+    workday_rows = []
+    for user in users:
+        for year, month in months:
+            for d in api.fetch_workdays(_int(user.get('ID')), year, month):
+                row = transform_workday(d, user, departments)
+                if row:
+                    workday_rows.append(row)
+    if workday_rows:
+        insert_client.insert(f"{db}.bitrix_workdays", workday_rows, column_names=WORKDAYS_COLUMNS)
+    log_func(f"INSERTED {len(workday_rows)} workdays ({len(users)} users, months={months})")
+except Exception as exc:
+    log_func(f"WORKDAYS IMPORT FAILED: {exc}")
+
 # Deduplicate ReplacingMergeTree tables
-for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories'):
+for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories', 'bitrix_workdays'):
     try:
         ch_query.execute(
             f"OPTIMIZE TABLE {db}.{table} FINAL",

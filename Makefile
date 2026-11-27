@@ -14,6 +14,12 @@ deploy-scripts:
 deploy-bitrix:
 	ansible-playbook -i $(INVENTORY) ansible/bitrix.yml --vault-password-file $(VAULT_PASS_FILE)
 
+# Ручной прогон импорта Bitrix24 на сервере (вывод — в консоль и в /opt/scripts/bitrix/logs)
+run-bitrix:
+	ansible clickhouse -i $(INVENTORY) -b -m shell \
+		-a 'cd /opt/scripts/bitrix && /opt/scripts/.venv/bin/python3 insert.py 2>&1 | tee -a /opt/scripts/bitrix/logs; exit $${PIPESTATUS[0]}' \
+		-e ansible_shell_executable=/bin/bash
+
 deploy-yogile:
 	ansible-playbook -i $(INVENTORY) ansible/yogile.yml --vault-password-file $(VAULT_PASS_FILE)
 
@@ -43,4 +49,4 @@ endif
 	@printf "Metrika:    " && curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: OAuth $(TOKEN)" https://api-metrika.yandex.net/management/v1/counters
 	@printf "AppMetrica: " && curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: OAuth $(TOKEN)" https://api.appmetrica.yandex.ru/management/v1/applications
 
-.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix deploy-yogile deploy-appmetrica encrypt decrypt token token-check
+.PHONY: deploy deploy-clickhouse deploy-scripts deploy-bitrix run-bitrix deploy-yogile deploy-appmetrica encrypt decrypt token token-check

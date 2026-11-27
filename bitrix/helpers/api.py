@@ -103,3 +103,47 @@ class BitrixApiClient:
                     log_func(f"tasks.task.list: not available (HTTP {e.response.status_code}), skipping")
                 return []
             raise
+
+    # --- Users / departments / worktime -----------------------------------
+
+    def fetch_users(self, log_func=None) -> list[dict]:
+        """Все сотрудники (активные и уволенные), без экстранета и ботов."""
+        return self.fetch_list('user.get', {'FILTER': {'USER_TYPE': 'employee'}}, log_func)
+
+    def fetch_departments(self, log_func=None) -> dict[int, str]:
+        """{id: name}; пусто, если у вебхука нет права department."""
+        try:
+            body = self._call('department.get', {})
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (400, 401, 403):
+                if log_func:
+                    log_func("department.get: no access, departments will be empty")
+                return {}
+            raise
+        if 'error' in body:
+            if log_func:
+                log_func(f"department.get: {body['error']}, departments will be empty")
+            return {}
+        result = {}
+        start = 0
+        items = body.get('result', [])
+        while True:
+            for d in items:
+                result[int(d['ID'])] = str(d.get('NAME') or '')
+            if body.get('next') is None:
+                break
+            start = body['next']
+            body = self._call('department.get', {'start': start})
+            items = body.get('result', [])
+        return result
+
+    def fetch_workdays(self, user_id: int, year: int, month: int) -> list[dict]:
+        """Рабочие дни сотрудника за месяц (timeman.timecontrol.reports.get)."""
+        try:
+            body = self._call('timeman.timecontrol.reports.get',
+                              {'USER_ID': user_id, 'YEAR': year, 'MONTH': month})
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (400, 403, 404):
+                return []
+            raise
+        return ((body.get('result') or {}).get('report') or {}).get('days') or []
