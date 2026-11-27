@@ -162,4 +162,39 @@ CREATE TABLE IF NOT EXISTS {db}.bitrix_task_time (
 ORDER BY ID
 """)
 
+# Ключ таблицы менялся (отрезок → кусок отрезка по сменам). Данные целиком
+# пересчитываются из Битрикса, поэтому старую версию удаляем и сбрасываем checkpoint.
+INTERVALS_KEY = 'TASK_ID, DATE_START, WORK_DATE'
+old_key = client.execute(
+    "SELECT sorting_key FROM system.tables WHERE database = %(db)s AND name = 'bitrix_task_work_intervals'",
+    {'db': db},
+)
+if old_key and old_key[0][0] != INTERVALS_KEY:
+    client.execute(f"DROP TABLE {db}.bitrix_task_work_intervals")
+    client.execute(
+        f"ALTER TABLE {db}.bitrix_checkpoint DELETE WHERE entity = 'task_intervals'",
+        settings={'mutations_sync': 1},
+    )
+    print("bitrix_task_work_intervals: old schema dropped")
+
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.bitrix_task_work_intervals (
+    TASK_ID        UInt64                                COMMENT 'ID задачи',
+    TASK_TITLE     String                                COMMENT 'Название задачи',
+    USER_ID        UInt32                                COMMENT 'Кто нажал «Начать»',
+    USER_NAME      String                                COMMENT 'Имя Фамилия',
+    WORK_DATE      Date                                  COMMENT 'День смены, на который засчитан кусок',
+    DATE_START     DateTime('Europe/Moscow')             COMMENT 'Начало всего отрезка: задачу перевели в «Выполняется»',
+    DATE_END       Nullable(DateTime('Europe/Moscow'))   COMMENT 'Конец всего отрезка: следующий статус; NULL, если ещё в работе',
+    END_STATUS     UInt8                                 COMMENT 'Статус после отрезка: 2 ждёт, 4 контроль, 5 завершена, 6 отложена; 0 — ещё в работе',
+    SEGMENT_START  DateTime('Europe/Moscow')             COMMENT 'Начало куска внутри смены',
+    SEGMENT_END    DateTime('Europe/Moscow')             COMMENT 'Конец куска внутри смены',
+    DURATION_SEC   UInt32                                COMMENT 'Длительность всего отрезка (повторяется в каждом куске, не суммировать)',
+    WORK_SEC       UInt32                                COMMENT 'Засчитано за этот день: пересечение отрезка со сменой',
+    IS_SUSPICIOUS  UInt8                                 COMMENT '1 = отрезок тянулся через несколько смен или срезан лимитом 10 ч',
+    updated_at     DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY ({INTERVALS_KEY})
+""")
+
 print("Tables created successfully")

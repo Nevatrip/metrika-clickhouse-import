@@ -176,3 +176,34 @@ class BitrixApiClient:
                                      {'filter': {'ID': chunk}, 'select': ['ID', 'TITLE']}, log_func):
                 titles[int(t['id'])] = str(t.get('title') or '')
         return titles
+
+    def fetch_tasks_changed(self, changed_from: str | None, log_func=None) -> list[dict]:
+        params: dict = {'select': ['ID', 'TITLE', 'RESPONSIBLE_ID']}
+        if changed_from:
+            params['filter'] = {'>=CHANGED_DATE': changed_from}
+        return self.fetch_list('tasks.task.list', params, log_func)
+
+    def fetch_tasks_by_ids(self, task_ids: list[int], log_func=None) -> list[dict]:
+        res = []
+        for i in range(0, len(task_ids), 50):
+            res += self.fetch_list('tasks.task.list', {
+                'filter': {'ID': task_ids[i:i + 50]}, 'select': ['ID', 'TITLE', 'RESPONSIBLE_ID'],
+            }, log_func)
+        return res
+
+    def fetch_task_status_history(self, task_id: int) -> list[dict]:
+        """Смены статуса задачи по возрастанию времени: [{at, from, to, user_id}]."""
+        body = self._call('tasks.task.history.list', {'taskId': task_id})
+        items = ((body.get('result') or {}).get('list')) or []
+        res = []
+        for x in items:
+            if x.get('field') != 'STATUS':
+                continue
+            user = x.get('user') if isinstance(x.get('user'), dict) else {}
+            res.append({
+                'at': x.get('createdDate'),
+                'from': (x.get('value') or {}).get('from'),
+                'to': (x.get('value') or {}).get('to'),
+                'user_id': user.get('id'),
+            })
+        return sorted(res, key=lambda r: r['at'] or '')

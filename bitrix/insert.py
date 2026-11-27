@@ -401,7 +401,7 @@ def transform_workday(d: dict, user: dict, departments: dict[int, str]) -> tuple
         name,
         _str(user.get('WORK_POSITION')),
         dep,
-        datetime.strptime(d['index'], '%Y%m%d').date(),
+        start.date(),  # ночную смену Битрикс отдаёт за оба дня — считаем её по дню начала
         start,
         finish,
         1 if complete else 0,
@@ -428,8 +428,15 @@ try:
                 row = transform_workday(d, user, departments)
                 if row:
                     workday_rows.append(row)
+    # дубли ночных смен: одна смена приходит в отчёте и за день начала, и за следующий
+    workday_rows = list({(r[0], r[4]): r for r in workday_rows}.values())
     if workday_rows:
         insert_client.insert(f"{db}.bitrix_workdays", workday_rows, column_names=WORKDAYS_COLUMNS)
+    # чистим дубли, записанные раньше по дате отчёта, а не по дате начала смены
+    ch_query.execute(
+        f"ALTER TABLE {db}.bitrix_workdays DELETE WHERE WORK_DATE != toDate(DATE_START)",
+        settings={'mutations_sync': 1},
+    )
     log_func(f"INSERTED {len(workday_rows)} workdays ({len(users)} users, months={months})")
 except Exception as exc:
     log_func(f"WORKDAYS IMPORT FAILED: {exc}")
@@ -463,8 +470,119 @@ try:
 except Exception as exc:
     log_func(f"TASK TIME IMPORT FAILED: {exc}")
 
+# 9. Отрезки работы по задачам из истории статусов («Начать» → «Пауза»/«Завершить»).
+#    Отрезок «в работе» режется по сменам сотрудника из bitrix_workdays: каждой смене,
+#    которую он пересекает, — своя строка (WORK_DATE = день смены). Время вне смен
+#    не засчитывается. Если отрезок не пересекает ни одной смены — засчитываем
+#    до NO_SHIFT_CAP_SEC от начала.
+#    Пересчитываются задачи, изменённые с прошлого запуска, плюс задачи, чьи отрезки
+#    ещё открыты или касались последних дней (их смены могли закрыться позже).
+STATUS_IN_PROGRESS = '3'
+NO_SHIFT_CAP_SEC = 10 * 3600
+RECHECK_DAYS = 3
+MSK = timezone(timedelta(hours=3))
+
+def _msk(s: str | None) -> datetime | None:
+    return datetime.fromisoformat(s).replace(tzinfo=MSK) if s else None
+
+def _load_shifts() -> dict[int, list[tuple]]:
+    """{USER_ID: [(WORK_DATE, начало, конец | None), ...]} по возрастанию начала."""
+    rows = ch_query.execute(
+        f"SELECT USER_ID, WORK_DATE, toString(DATE_START), toString(DATE_FINISH) "
+        f"FROM {db}.bitrix_workdays FINAL ORDER BY USER_ID, DATE_START"
+    )
+    shifts: dict[int, list[tuple]] = {}
+    for uid, wd, st, fin in rows:
+        shifts.setdefault(uid, []).append((wd, _msk(st), _msk(fin)))
+    return shifts
+
+def _split_by_shifts(start: datetime, end: datetime, shifts: list[tuple],
+                     now: datetime) -> tuple[list[tuple], bool]:
+    """[(WORK_DATE, начало куска, конец куска)], признак «подозрительный»."""
+    pieces = []
+    for wd, sh_start, sh_end in shifts:
+        sh_end = sh_end or now                      # смена ещё открыта
+        p_start, p_end = max(start, sh_start), min(end, sh_end)
+        if p_end > p_start:
+            pieces.append((wd, p_start, p_end))
+    if pieces:
+        return pieces, len(pieces) > 1              # тянулся через несколько смен
+    cap_end = min(end, start + timedelta(seconds=NO_SHIFT_CAP_SEC))
+    return [(start.date(), start, cap_end)], cap_end < end
+
+def build_intervals(task: dict, history: list[dict], shifts: dict, user_names: dict,
+                    now: datetime) -> list[tuple]:
+    rows = []
+    start, start_user = None, None
+
+    def close(end: datetime | None, end_status: int):
+        actual_end = end or now
+        duration = max(int((actual_end - start).total_seconds()), 0)
+        pieces, suspicious = _split_by_shifts(start, actual_end, shifts.get(start_user, []), now)
+        for wd, p_start, p_end in pieces:
+            rows.append((
+                _int(task.get('id')), _str(task.get('title')),
+                start_user, user_names.get(start_user, ''),
+                wd, start, end, end_status, p_start, p_end,
+                duration, int((p_end - p_start).total_seconds()), 1 if suspicious else 0,
+            ))
+
+    for h in history:
+        at = _local_dt(h['at'])
+        if at is None:
+            continue
+        if h['to'] == STATUS_IN_PROGRESS and start is None:
+            start, start_user = at, _int(h['user_id']) or _int(task.get('responsibleId'))
+        elif h['from'] == STATUS_IN_PROGRESS and start is not None:
+            close(at, _int(h['to']))
+            start = None
+    if start is not None:
+        close(None, 0)
+    return rows
+
+INTERVALS_COLUMNS = [
+    'TASK_ID', 'TASK_TITLE', 'USER_ID', 'USER_NAME', 'WORK_DATE', 'DATE_START', 'DATE_END',
+    'END_STATUS', 'SEGMENT_START', 'SEGMENT_END', 'DURATION_SEC', 'WORK_SEC', 'IS_SUSPICIOUS',
+]
+
+try:
+    intervals_run_start = datetime.utcnow().isoformat()
+    intervals_from = filter_dt(checkpoint, 'task_intervals')
+    tasks_by_id = {_int(t.get('id')): t for t in api.fetch_tasks_changed(intervals_from, log_func)}
+    if intervals_from:
+        recheck_ids = [r[0] for r in ch_query.execute(
+            f"SELECT DISTINCT TASK_ID FROM {db}.bitrix_task_work_intervals FINAL "
+            f"WHERE DATE_END IS NULL OR DATE_END >= now() - INTERVAL {RECHECK_DAYS} DAY"
+        ) if r[0] not in tasks_by_id]
+        for t in api.fetch_tasks_by_ids(recheck_ids, log_func):
+            tasks_by_id[_int(t.get('id'))] = t
+    shifts = _load_shifts()
+    user_names = {
+        _int(u.get('ID')): ' '.join(p for p in (_str(u.get('NAME')).strip(), _str(u.get('LAST_NAME')).strip()) if p)
+        for u in api.fetch_users()
+    }
+    now_msk = datetime.now(MSK)
+    interval_rows = []
+    for i, (task_id, task) in enumerate(tasks_by_id.items(), 1):
+        history = api.fetch_task_status_history(task_id)
+        interval_rows.extend(build_intervals(task, history, shifts, user_names, now_msk))
+        if i % 100 == 0:
+            log_func(f"task status history: {i}/{len(tasks_by_id)} tasks")
+    if tasks_by_id:
+        # пересчитанные задачи заменяем целиком: число кусков по дням могло измениться
+        ch_query.execute(
+            f"ALTER TABLE {db}.bitrix_task_work_intervals DELETE WHERE TASK_ID IN %(ids)s",
+            {'ids': tuple(tasks_by_id)}, settings={'mutations_sync': 1},
+        )
+    if interval_rows:
+        insert_client.insert(f"{db}.bitrix_task_work_intervals", interval_rows, column_names=INTERVALS_COLUMNS)
+    save_checkpoint(['task_intervals'], intervals_run_start)
+    log_func(f"INSERTED {len(interval_rows)} task work segments ({len(tasks_by_id)} tasks, from={intervals_from})")
+except Exception as exc:
+    log_func(f"TASK INTERVALS IMPORT FAILED: {exc}")
+
 # Deduplicate ReplacingMergeTree tables
-for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories', 'bitrix_workdays', 'bitrix_task_time'):
+for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories', 'bitrix_workdays', 'bitrix_task_time', 'bitrix_task_work_intervals'):
     try:
         ch_query.execute(
             f"OPTIMIZE TABLE {db}.{table} FINAL",
