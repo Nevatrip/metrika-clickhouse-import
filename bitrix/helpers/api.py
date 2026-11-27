@@ -147,3 +147,32 @@ class BitrixApiClient:
                 return []
             raise
         return ((body.get('result') or {}).get('report') or {}).get('days') or []
+
+    def fetch_task_elapsed(self, log_func=None) -> list[dict]:
+        """Все записи затраченного времени по задачам (task.elapseditem.getlist).
+        Старый метод: пагинация через NAV_PARAMS, а не start."""
+        results, page = [], 1
+        while True:
+            body = self._call('task.elapseditem.getlist', {
+                'ORDER': {'ID': 'asc'},
+                'FILTER': {},
+                'SELECT': ['*'],
+                'PARAMS': {'NAV_PARAMS': {'nPageSize': 50, 'iNumPage': page}},
+            })
+            items = body.get('result') or []
+            results.extend(items)
+            if log_func:
+                log_func(f"task.elapseditem.getlist: fetched {len(results)} records")
+            if not items or len(results) >= int(body.get('total') or 0):
+                break
+            page += 1
+        return results
+
+    def fetch_task_titles(self, task_ids: list[int], log_func=None) -> dict[int, str]:
+        titles: dict[int, str] = {}
+        for i in range(0, len(task_ids), 50):
+            chunk = task_ids[i:i + 50]
+            for t in self.fetch_list('tasks.task.list',
+                                     {'filter': {'ID': chunk}, 'select': ['ID', 'TITLE']}, log_func):
+                titles[int(t['id'])] = str(t.get('title') or '')
+        return titles

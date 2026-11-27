@@ -146,4 +146,20 @@ CREATE TABLE IF NOT EXISTS {db}.bitrix_workdays (
 ORDER BY (USER_ID, WORK_DATE)
 """)
 
+client.execute(f"""
+CREATE TABLE IF NOT EXISTS {db}.bitrix_task_time (
+    ID           UInt64                     COMMENT 'ID записи учёта времени',
+    TASK_ID      UInt64                     COMMENT 'ID задачи',
+    TASK_TITLE   String                     COMMENT 'Название задачи',
+    USER_ID      UInt32                     COMMENT 'ID сотрудника',
+    USER_NAME    String                     COMMENT 'Имя Фамилия',
+    WORK_DATE    Date                       COMMENT 'Дата, на которую записано время',
+    SECONDS      UInt32                     COMMENT 'Затраченное время, сек',
+    COMMENT_TEXT String                     COMMENT 'Комментарий к записи',
+    CREATED_DATE DateTime('Europe/Moscow')  COMMENT 'Дата записи',
+    updated_at   DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY ID
+""")
+
 print("Tables created successfully")

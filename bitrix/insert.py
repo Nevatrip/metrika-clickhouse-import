@@ -434,8 +434,37 @@ try:
 except Exception as exc:
     log_func(f"WORKDAYS IMPORT FAILED: {exc}")
 
+# 8. Task time tracking (таймер в задачах). Записей мало — грузим все целиком.
+try:
+    elapsed = api.fetch_task_elapsed(log_func)
+    task_titles = api.fetch_task_titles(sorted({_int(e.get('TASK_ID')) for e in elapsed}), log_func)
+    user_names = {
+        _int(u.get('ID')): ' '.join(p for p in (_str(u.get('NAME')).strip(), _str(u.get('LAST_NAME')).strip()) if p)
+        for u in api.fetch_users()
+    } if elapsed else {}
+    task_time_rows = []
+    for e in elapsed:
+        created = _local_dt(e.get('CREATED_DATE'))
+        if created is None:
+            continue
+        task_id, user_id = _int(e.get('TASK_ID')), _int(e.get('USER_ID'))
+        task_time_rows.append((
+            _int(e.get('ID')), task_id, task_titles.get(task_id, ''),
+            user_id, user_names.get(user_id, ''),
+            created.date(), _sec(e.get('SECONDS')), _str(e.get('COMMENT_TEXT')), created,
+        ))
+    if task_time_rows:
+        insert_client.insert(
+            f"{db}.bitrix_task_time", task_time_rows,
+            column_names=['ID', 'TASK_ID', 'TASK_TITLE', 'USER_ID', 'USER_NAME',
+                          'WORK_DATE', 'SECONDS', 'COMMENT_TEXT', 'CREATED_DATE'],
+        )
+    log_func(f"INSERTED {len(task_time_rows)} task time records")
+except Exception as exc:
+    log_func(f"TASK TIME IMPORT FAILED: {exc}")
+
 # Deduplicate ReplacingMergeTree tables
-for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories', 'bitrix_workdays'):
+for table in ('bitrix_leads', 'bitrix_deals', 'bitrix_statuses', 'bitrix_deal_categories', 'bitrix_workdays', 'bitrix_task_time'):
     try:
         ch_query.execute(
             f"OPTIMIZE TABLE {db}.{table} FINAL",
